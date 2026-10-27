@@ -22,7 +22,15 @@ check() {
 }
 
 check 'api health' "$BASE_URL/api/health" 200 '"status":"ok"'
-check 'home page' "$BASE_URL/" 200 'data-testid="api-status">ok<'
+check 'root → language redirect' "$BASE_URL/" 307
+check 'home page (ka)' "$BASE_URL/ka" 200 'თამარ მეფის 1'
+check 'home page (ru)' "$BASE_URL/ru" 200 'Тамар Мепе, 1'
+check 'home page (en)' "$BASE_URL/en" 200 'Tamar Mepe 1'
+check 'login page' "$BASE_URL/ru/login" 200 'type="password"'
+check 'admin without session → login' "$BASE_URL/ru/admin" 307
+check 'session without cookie' "$BASE_URL/api/auth/session" 200 '"user":null'
+check 'users API without session' "$BASE_URL/api/users" 401
+check 'unknown page' "$BASE_URL/ru/does-not-exist" 404
 check 'unknown api route' "$BASE_URL/api/does-not-exist" 404
 HTTP_URL=$(echo "$BASE_URL" | sed 's#^https:#http:#')
 check 'http → https redirect' "$HTTP_URL/" 308

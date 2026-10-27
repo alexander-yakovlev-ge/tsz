@@ -18,6 +18,18 @@ export const env = {
   get workerHealthPort(): number {
     return Number(optional('WORKER_HEALTH_PORT', '3002'));
   },
+  /** Секрет подписи JWT сессии, общий с web (ТЗ п. 11). */
+  get jwtSecret(): string {
+    const secret = required('JWT_SECRET');
+    if (secret.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters');
+    }
+    return secret;
+  },
+  /** Тестовый API для e2e (/api/test/*). В продакшене выключен. */
+  get enableTestApi(): boolean {
+    return optional('ENABLE_TEST_API', 'false') === 'true';
+  },
   get databaseUrl(): string {
     return required('DATABASE_URL');
   },
