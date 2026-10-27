@@ -1,0 +1,15 @@
+{
+  "name": "@tsz/fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "generate": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'fixtures: no tests yet'"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "~5.9.3"
+  }
+}

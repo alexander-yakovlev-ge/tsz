@@ -1,0 +1,85 @@
+// Схема БД сайта ТСЖ. Модели добавляются по этапам плана (docs/plan.md).
+// Частичные уникальные индексы создаются вручную в SQL-миграциях (Prisma их не поддерживает).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  RESIDENT
+}
+
+enum Locale {
+  ka
+  ru
+  en
+}
+
+model User {
+  id                  String    @id @default(uuid()) @db.Uuid
+  // Уникальность среди неудалённых: частичный индекс users_phone_active_key в миграции.
+  phone               String
+  passwordHash        String    @map("password_hash")
+  role                Role
+  name                String?
+  language            Locale    @default(ka)
+  notifyAnnouncements Boolean   @default(true) @map("notify_announcements")
+  notifyBalance       Boolean   @default(true) @map("notify_balance")
+  tokenVersion        Int       @default(0) @map("token_version")
+  announcementsSeenAt DateTime? @map("announcements_seen_at")
+  deletedAt           DateTime? @map("deleted_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@index([phone])
+  @@map("users")
+}
+
+model Contact {
+  id                  String   @id @default(uuid()) @db.Uuid
+  chairmanNameKa      String   @map("chairman_name_ka")
+  chairmanNameRu      String   @map("chairman_name_ru")
+  chairmanNameEn      String   @map("chairman_name_en")
+  chairmanPhone       String   @map("chairman_phone")
+  contactPersonNameKa String   @map("contact_person_name_ka")
+  contactPersonNameRu String   @map("contact_person_name_ru")
+  contactPersonNameEn String   @map("contact_person_name_en")
+  contactPersonPhone  String   @map("contact_person_phone")
+  telegramUrl         String   @map("telegram_url")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("contacts")
+}
+
+model HomePage {
+  id        String   @id @default(uuid()) @db.Uuid
+  nameKa    String   @map("name_ka")
+  nameRu    String   @map("name_ru")
+  nameEn    String   @map("name_en")
+  addressKa String   @map("address_ka")
+  addressRu String   @map("address_ru")
+  addressEn String   @map("address_en")
+  introKa   String   @map("intro_ka")
+  introRu   String   @map("intro_ru")
+  introEn   String   @map("intro_en")
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("home_page")
+}
+
+model DocumentCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  nameKa    String   @map("name_ka")
+  nameRu    String   @map("name_ru")
+  nameEn    String   @map("name_en")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("document_categories")
+}

@@ -1,0 +1,24 @@
+# Reverse-proxy: один домен для сайта и API (ТЗ п. 2.2).
+# Локально сертификат выпускает внутренний CA Caddy (tls internal);
+# корневой сертификат экспортируется командой `make cert`.
+{
+	admin 127.0.0.1:2019
+}
+
+{$SITE_ADDRESS} {
+	tls {$TLS_MODE}
+
+	encode zstd gzip
+
+	request_body {
+		max_size 25MB
+	}
+
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
