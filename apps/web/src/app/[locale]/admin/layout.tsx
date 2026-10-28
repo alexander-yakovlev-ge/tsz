@@ -5,6 +5,7 @@ import { NavLink } from '@/components/nav-link';
 import { SiteHeader } from '@/components/site-header';
 import { requireAdmin } from '@/lib/auth';
 import { LocaleParams, readLocale } from '@/i18n/params';
+import { SECTIONS } from './sections';
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -31,9 +32,11 @@ export default async function AdminLayout({
           <NavLink href="/admin" exact variant="sidebar">
             {t('dashboard')}
           </NavLink>
-          <NavLink href="/admin/users" variant="sidebar">
-            {t('users')}
-          </NavLink>
+          {SECTIONS.map((section) => (
+            <NavLink key={section} href={`/admin/${section}`} variant="sidebar">
+              {t(`sections.${section}.title`)}
+            </NavLink>
+          ))}
         </nav>
         <main className="min-w-0 flex-[999_1_560px]">{children}</main>
       </div>

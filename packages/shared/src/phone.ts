@@ -15,3 +15,13 @@ export function normalizePhone(input: string): string | null {
   }
   return parsed.number;
 }
+
+/** Телефон для показа: `+995555123456` → `+995 555 12 34 56`. Не E.164 — строка как есть. */
+export function formatPhone(phone: string): string {
+  return parsePhoneNumberFromString(phone)?.formatInternational() ?? phone;
+}
+
+/** Ссылка на чат WhatsApp (ТЗ п. 6.5): `https://wa.me/<номер без +>`. null — телефон не в E.164. */
+export function whatsappChatUrl(phone: string): string | null {
+  return /^\+[1-9]\d{7,14}$/.test(phone) ? `https://wa.me/${phone.slice(1)}` : null;
+}

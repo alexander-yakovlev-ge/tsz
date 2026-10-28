@@ -79,3 +79,37 @@ export async function createUser(
   const body = (await response.json()) as { user: { id: string; phone: string } };
   return { id: body.user.id, phone: body.user.phone, password };
 }
+
+/** Сдвигает часы API (тестовый API): «наступление» даты публикации объявления. */
+export async function setClock(request: APIRequestContext, offsetMs: number): Promise<void> {
+  const response = await put(request, '/api/test/clock', { offsetMs });
+  expect(response.status()).toBe(204);
+}
+
+export async function resetClock(request: APIRequestContext): Promise<void> {
+  const response = await del(request, '/api/test/clock');
+  expect(response.status()).toBe(204);
+}
+
+/** Уникальная метка для заголовков, чтобы тесты не путали свои данные с данными прошлых прогонов. */
+export function uniqueTag(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export interface UploadFile {
+  name: string;
+  mimeType: string;
+  buffer: Buffer;
+}
+
+/** Загрузка документа multipart-запросом (request должен быть авторизован как админ). */
+export function uploadDocument(
+  request: APIRequestContext,
+  fields: Record<string, string>,
+  file: UploadFile,
+): Promise<APIResponse> {
+  return request.post('/api/documents', {
+    headers: ORIGIN,
+    multipart: { ...fields, file },
+  });
+}

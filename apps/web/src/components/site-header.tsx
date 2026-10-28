@@ -1,6 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
-import { getSession } from '@/lib/api';
+import { apiGet, getSession } from '@/lib/api';
 import { LanguageSwitcher } from './language-switcher';
 import { LogoutButton } from './logout-button';
 import { NavLink } from './nav-link';
@@ -11,6 +11,8 @@ import { NavLink } from './nav-link';
  */
 export async function SiteHeader({ overlay = false }: { overlay?: boolean }) {
   const [t, user] = await Promise.all([getTranslations(), getSession()]);
+  // Бейдж непрочитанных объявлений — только для вошедших (ТЗ п. 6.2).
+  const unread = user ? await apiGet<{ count: number }>('/api/me/announcements/unread') : null;
 
   return (
     <header className={overlay ? 'relative text-white' : 'bg-ink text-white'}>
@@ -46,6 +48,18 @@ export async function SiteHeader({ overlay = false }: { overlay?: boolean }) {
           <NavLink href="/" exact>
             {t('nav.home')}
           </NavLink>
+          <NavLink
+            href="/announcements"
+            badge={
+              unread
+                ? { count: unread.count, label: t('nav.unread', { count: unread.count }) }
+                : undefined
+            }
+          >
+            {t('nav.announcements')}
+          </NavLink>
+          <NavLink href="/documents">{t('nav.documents')}</NavLink>
+          <NavLink href="/contacts">{t('nav.contacts')}</NavLink>
           {user && <NavLink href="/account">{t('nav.account')}</NavLink>}
           {user?.role === 'ADMIN' && <NavLink href="/admin">{t('nav.admin')}</NavLink>}
         </nav>

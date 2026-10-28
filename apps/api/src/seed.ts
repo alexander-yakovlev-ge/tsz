@@ -52,7 +52,6 @@ async function seedContact(): Promise<void> {
       contactPersonNameRu: '—',
       contactPersonNameEn: '—',
       contactPersonPhone: '—',
-      telegramUrl: 'https://t.me/',
     },
   });
   console.log('seed: contacts placeholder created');
@@ -64,9 +63,9 @@ async function seedHomePage(): Promise<void> {
   }
   await prisma.homePage.create({
     data: {
-      nameKa: 'ბინათმესაკუთრეთა ამხანაგობა',
-      nameRu: 'ТСЖ',
-      nameEn: 'Homeowners Association',
+      nameKa: 'თამარ მეფის 1',
+      nameRu: 'Тамар Мепе, 1',
+      nameEn: 'Tamar Mepe 1',
       addressKa: 'ქ. ბათუმი, თამარ მეფის გამზირი, N 1',
       addressRu: 'г. Батуми, пр. Тамар Мепе, 1',
       addressEn: '1 Tamar Mepe Ave, Batumi',

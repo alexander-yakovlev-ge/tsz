@@ -14,6 +14,24 @@
 		max_size 25MB
 	}
 
+	# Загрузка документов: файл до 20 МиБ (ТЗ п. 8.6) плюс поля формы multipart.
+	@document_upload path /api/documents /api/documents/*
+	request_body @document_upload {
+		max_size 21MiB
+	}
+
+	# Скачивание по presigned URL (ТЗ п. 6.3): путь начинается с имени бакета (S3_BUCKET).
+	# Host не меняется — по нему хранилище проверяет подпись. Только чтение; cookie сайта хранилищу не нужна.
+	@files {
+		path /files/*
+		method GET HEAD
+	}
+	handle @files {
+		reverse_proxy storage:8333 {
+			header_up -Cookie
+		}
+	}
+
 	handle /api/* {
 		reverse_proxy api:3001
 	}

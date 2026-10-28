@@ -16,3 +16,46 @@
 body {
   @apply bg-gray-50 text-ink antialiased;
 }
+
+/* Текст из Markdown: приветствие на главной, объявления. */
+.markdown {
+  @apply flex flex-col gap-3 leading-relaxed break-words;
+}
+.markdown h1,
+.markdown h2 {
+  @apply mt-2 text-2xl font-bold;
+}
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  @apply mt-2 text-xl font-bold;
+}
+.markdown ul {
+  @apply list-disc pl-6;
+}
+.markdown ol {
+  @apply list-decimal pl-6;
+}
+.markdown a {
+  @apply font-semibold text-accent underline underline-offset-4;
+}
+.markdown blockquote {
+  @apply border-l-4 border-gray-300 pl-4 text-gray-700;
+}
+.markdown code {
+  @apply rounded bg-gray-100 px-1.5 py-0.5 text-[0.9em];
+}
+.markdown pre {
+  @apply overflow-x-auto rounded-xl bg-gray-100 p-4;
+}
+.markdown table {
+  @apply block overflow-x-auto;
+}
+.markdown th,
+.markdown td {
+  @apply border border-gray-200 px-3 py-1.5 text-left;
+}
+.markdown hr {
+  @apply border-gray-200;
+}

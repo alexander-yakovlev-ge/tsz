@@ -27,6 +27,16 @@ check 'home page (ka)' "$BASE_URL/ka" 200 'თამარ მეფის 1'
 check 'home page (ru)' "$BASE_URL/ru" 200 'Тамар Мепе, 1'
 check 'home page (en)' "$BASE_URL/en" 200 'Tamar Mepe 1'
 check 'login page' "$BASE_URL/ru/login" 200 'type="password"'
+check 'announcements (ru)' "$BASE_URL/ru/announcements" 200 '<h1'
+check 'documents (ka)' "$BASE_URL/ka/documents" 200 'დოკუმენტები'
+check 'contacts (en)' "$BASE_URL/en/contacts" 200 'Contacts'
+check 'hreflang on a public page' "$BASE_URL/ru/contacts" 200 'hrefLang="ka"'
+check 'contacts API' "$BASE_URL/api/contacts" 200 '"chairmanPhone"'
+check 'document categories API' "$BASE_URL/api/document-categories" 200 '"categories"'
+check 'robots.txt' "$BASE_URL/robots.txt" 200 'Sitemap:'
+check 'sitemap.xml' "$BASE_URL/sitemap.xml" 200 '/ru/announcements'
+check 'unknown document → 404' "$BASE_URL/api/documents/00000000-0000-4000-8000-000000000000/download" 404
+check 'storage listing is closed' "$BASE_URL/files/" 403
 check 'admin without session → login' "$BASE_URL/ru/admin" 307
 check 'session without cookie' "$BASE_URL/api/auth/session" 200 '"user":null'
 check 'users API without session' "$BASE_URL/api/users" 401

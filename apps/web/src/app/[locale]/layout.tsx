@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import { SiteFooter } from '@/components/site-footer';
 import { routing } from '@/i18n/routing';
 import { LocaleParams, readLocale } from '@/i18n/params';
+import { siteUrl } from '@/lib/site';
 
 interface Props {
   children: ReactNode;
@@ -21,6 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     locale: hasLocale(routing.locales, locale) ? locale : routing.defaultLocale,
   });
   return {
+    metadataBase: new URL(siteUrl()),
     title: { default: t('meta.siteName'), template: `%s · ${t('meta.siteName')}` },
     description: t('meta.description'),
   };
