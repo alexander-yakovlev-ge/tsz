@@ -13,14 +13,63 @@
     "admin": "Admin",
     "login": "Sign in",
     "logout": "Sign out",
-    "language": "Language"
+    "language": "Language",
+    "announcements": "Announcements",
+    "documents": "Documents",
+    "contacts": "Contacts",
+    "unread": "{count, plural, one {# new announcement} other {# new announcements}}"
   },
   "home": {
     "photoAlt": "The building at 1 Tamar Mepe Avenue",
     "eyebrow": "Homeowners association · Batumi",
-    "title": "Tamar Mepe 1",
-    "lead": "Everything about the building in one place: announcements, documents and the balance of your unit.",
-    "account": "My account"
+    "account": "My account",
+    "fallbackTitle": "Tamar Mepe 1",
+    "announcements": "Announcements",
+    "welcome": "About the building",
+    "latest": "Latest announcements",
+    "allAnnouncements": "All announcements →",
+    "noAnnouncements": "No announcements yet.",
+    "contacts": "Contacts"
+  },
+  "announcements": {
+    "title": "Announcements",
+    "description": "Important announcements of the Tamar Mepe 1 homeowners association for owners and residents.",
+    "empty": "No announcements yet.",
+    "pinned": "Pinned",
+    "readMore": "Read more",
+    "readMoreAbout": "Read more: {title}",
+    "pagination": "Announcement pages",
+    "newer": "← Newer",
+    "older": "Older →",
+    "pageOf": "Page {page} of {count}",
+    "back": "← All announcements"
+  },
+  "documents": {
+    "title": "Documents",
+    "description": "Charter, meeting minutes and reports of the Tamar Mepe 1 homeowners association.",
+    "empty": "No documents yet.",
+    "search": "Search by title",
+    "searchPlaceholder": "For example, minutes",
+    "found": "{count, plural, =0 {Nothing found} one {# document found} other {# documents found}}",
+    "nothingFound": "Nothing found. Try another word.",
+    "download": "Download",
+    "downloadNamed": "Download: {title}",
+    "visibility": {
+      "PUBLIC": "Public",
+      "OWNERS": "Owners only",
+      "PRIVATE": "Private"
+    }
+  },
+  "contacts": {
+    "title": "Contacts",
+    "description": "Chairman and contact person of the Tamar Mepe 1 homeowners association, WhatsApp and Telegram channels.",
+    "intro": "Tap a number to message on WhatsApp.",
+    "unavailable": "Contacts are temporarily unavailable.",
+    "chairman": "Chairman",
+    "contactPerson": "Owner relations",
+    "openWhatsApp": "(opens a WhatsApp chat)",
+    "whatsappChannel": "WhatsApp channel",
+    "telegramChannel": "Telegram channel"
   },
   "footer": {
     "name": "Tamar Mepe 1 Homeowners Association",
@@ -55,13 +104,136 @@
     "mismatch": "Passwords do not match",
     "back": "← My account"
   },
+  "form": {
+    "languages": {
+      "ka": "Georgian",
+      "ru": "Russian",
+      "en": "English"
+    },
+    "markdownHint": "Markdown: **bold**, *italic*, lists with \"- \", links [text](https://…). HTML is not supported.",
+    "preview": "Preview",
+    "edit": "Edit",
+    "previewEmpty": "The text is empty",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Changes saved",
+    "creating": "Creating…"
+  },
   "admin": {
     "title": "Administration",
     "nav": "Administration sections",
     "dashboard": "Overview",
-    "users": "Users",
     "dashboardIntro": "Debts, recent transactions and scheduled announcements will appear here.",
-    "usersCard": "Accounts of residents and administrators"
+    "sections": {
+      "announcements": {
+        "title": "Announcements",
+        "card": "Publish, pin and withdraw announcements"
+      },
+      "documents": {
+        "title": "Documents",
+        "card": "Upload documents, access and categories"
+      },
+      "contacts": {
+        "title": "Contacts",
+        "card": "Chairman, contact person and channels"
+      },
+      "home": {
+        "title": "Home page",
+        "card": "Name, address and welcome text"
+      },
+      "users": {
+        "title": "Users",
+        "card": "Accounts of residents and administrators"
+      }
+    }
+  },
+  "adminAnnouncements": {
+    "title": "Announcements",
+    "add": "New announcement",
+    "newTitle": "New announcement",
+    "editTitle": "Announcement",
+    "empty": "No announcements yet.",
+    "back": "← All announcements",
+    "titleField": "Title",
+    "bodyField": "Text",
+    "publishedAt": "Publication date",
+    "publishedAtHint": "Tbilisi time. A future date publishes the announcement at that moment.",
+    "pin": "Pin",
+    "pinHint": "Pinned announcements are shown first.",
+    "pinned": "pinned",
+    "create": "Create",
+    "status": "Status",
+    "statuses": {
+      "SCHEDULED": "Scheduled",
+      "PUBLISHED": "Published",
+      "ARCHIVED": "Withdrawn"
+    },
+    "openPublic": "Open on the website",
+    "publication": "Publication",
+    "publicationHint": "A withdrawn announcement disappears from the website and can be restored. Deletion is permanent.",
+    "archive": "Withdraw",
+    "restore": "Restore",
+    "delete": "Delete",
+    "deleteConfirm": "Delete the announcement? This cannot be undone."
+  },
+  "adminDocuments": {
+    "title": "Documents",
+    "manageCategories": "Categories →",
+    "uploadTitle": "Upload a document",
+    "noCategories": "Create at least one category first.",
+    "allDocuments": "All documents ({count})",
+    "empty": "No documents yet.",
+    "titleField": "Title",
+    "category": "Category",
+    "visibility": "Access",
+    "visibilityHint": "Owners-only documents will open to residents once units are added.",
+    "file": "File",
+    "fileHint": "PDF, DOCX, XLSX, JPG or PNG, up to 20 MB.",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "uploaded": "Document uploaded",
+    "back": "← All documents",
+    "editTitle": "Document",
+    "download": "Download file",
+    "deleteTitle": "Deletion",
+    "deleteHint": "The document disappears from the website and the file is removed from storage.",
+    "delete": "Delete document",
+    "deleteConfirm": "Delete the document “{title}”?",
+    "categoriesTitle": "Document categories",
+    "categoriesIntro": "Categories appear on the Documents page in ascending order. Only an empty category can be deleted.",
+    "newCategory": "New category",
+    "categoryName": "Name",
+    "sortOrder": "Order",
+    "sortOrderHint": "Lower comes first",
+    "addCategory": "Add category",
+    "categoryCreated": "Category created",
+    "deleteCategory": "Delete category",
+    "categoryDeleteConfirm": "Delete the category?",
+    "categoryInUse": "{count, plural, one {# document in the category} other {# documents in the category}} — cannot delete"
+  },
+  "adminContacts": {
+    "title": "Contacts",
+    "intro": "Changes appear on the website immediately.",
+    "openPublic": "Open the contacts page",
+    "phones": "Phones",
+    "chairmanPhone": "Chairman’s phone",
+    "contactPersonPhone": "Contact person’s phone",
+    "phoneHint": "Numbers without a country code are treated as Georgian. Opens a WhatsApp chat.",
+    "chairmanName": "Chairman",
+    "contactPersonName": "Owner relations",
+    "channels": "Association channels",
+    "whatsappUrl": "WhatsApp channel",
+    "whatsappUrlHint": "A https://whatsapp.com/channel/… or https://chat.whatsapp.com/… link; leave empty to hide the button.",
+    "telegramUrl": "Telegram channel",
+    "telegramUrlHint": "A https://t.me/… link; leave empty to hide the button."
+  },
+  "adminHome": {
+    "title": "Home page",
+    "intro": "Name, address and welcome text on the home page.",
+    "openPublic": "Open the home page",
+    "name": "Association name",
+    "address": "Address",
+    "greeting": "Welcome text"
   },
   "users": {
     "title": "Users",
@@ -126,7 +298,13 @@
     "TOO_LONG": "Value is too long",
     "INVALID_VALUE": "Invalid value",
     "NETWORK": "Cannot reach the server. Check your connection.",
-    "UNKNOWN": "Something went wrong. Please try again."
+    "UNKNOWN": "Something went wrong. Please try again.",
+    "CATEGORY_NOT_EMPTY": "The category has documents and cannot be deleted",
+    "FILE_REQUIRED": "Choose a file",
+    "FILE_TOO_LARGE": "The file is larger than 20 MB",
+    "FILE_TYPE_NOT_ALLOWED": "Unsupported format: only PDF, DOCX, XLSX, JPG, PNG",
+    "INVALID_URL": "Invalid link",
+    "INVALID_DATE": "Invalid date"
   },
   "notFound": {
     "title": "Page not found",

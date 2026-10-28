@@ -12,12 +12,11 @@ import { AuditService } from '../audit/audit.service';
 import { generatePassword, hashPassword } from '../auth/passwords';
 import { toSessionUser } from '../auth/session.service';
 import { ApiError } from '../common/api-error';
+import { isUuid } from '../common/ids';
 import { PrismaService } from '../prisma/prisma.service';
 
 type CreateUser = z.output<typeof createUserSchema>;
 type UpdateUser = z.output<typeof updateUserSchema>;
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function toListItem(user: User): UserListItem {
   return { ...toSessionUser(user), createdAt: user.createdAt.toISOString() };
@@ -172,7 +171,7 @@ export class UsersService {
   }
 
   private async findActive(id: string): Promise<User> {
-    const user = UUID.test(id)
+    const user = isUuid(id)
       ? await this.prisma.user.findFirst({ where: { id, deletedAt: null } })
       : null;
     if (!user) {

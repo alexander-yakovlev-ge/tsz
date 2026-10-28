@@ -18,7 +18,7 @@ make up       # создаёт .env из .env.example, собирает обра
 
 Первый администратор создаётся автоматически из `ADMIN_PHONE` / `ADMIN_PASSWORD` в `.env`. Вход — `https://localhost/ru/login` (телефон можно вводить без кода страны).
 
-В `.env` обязателен `JWT_SECRET` — секрет подписи сессии, не короче 32 символов (`openssl rand -base64 48`). `ENABLE_TEST_API=true` включает тестовый API для e2e; на сервере — `false`.
+В `.env` обязателен `JWT_SECRET` — секрет подписи сессии, не короче 32 символов (`openssl rand -base64 48`). `ENABLE_TEST_API=true` включает тестовый API для e2e; на сервере — `false`. `SITE_URL` — публичный адрес сайта для canonical, hreflang и `sitemap.xml`.
 
 ## Команды
 
@@ -42,14 +42,14 @@ make up       # создаёт .env из .env.example, собирает обра
 
 ## Сервисы
 
-| Сервис     | Назначение                                         | Доступ снаружи               |
-| ---------- | -------------------------------------------------- | ---------------------------- |
-| `proxy`    | Caddy: HTTPS, `/api/*` → api, остальное → web      | `:80`, `:443`                |
-| `web`      | Next.js 15 (страницы, SSR)                         | через proxy                  |
-| `api`      | NestJS 11 (REST API); при старте — миграции и seed | через proxy (`/api`)         |
-| `worker`   | Фоновые задачи (pg-boss)                           | —                            |
-| `postgres` | PostgreSQL 17                                      | — (`make psql`)              |
-| `storage`  | SeaweedFS — S3-совместимое хранилище файлов        | filer UI на `127.0.0.1:8888` |
+| Сервис     | Назначение                                                          | Доступ снаружи               |
+| ---------- | ------------------------------------------------------------------- | ---------------------------- |
+| `proxy`    | Caddy: HTTPS, `/api/*` → api, `/files/*` → storage, остальное → web | `:80`, `:443`                |
+| `web`      | Next.js 15 (страницы, SSR)                                          | через proxy                  |
+| `api`      | NestJS 11 (REST API); при старте — миграции и seed                  | через proxy (`/api`)         |
+| `worker`   | Фоновые задачи (pg-boss)                                            | —                            |
+| `postgres` | PostgreSQL 17                                                       | — (`make psql`)              |
+| `storage`  | SeaweedFS — S3-совместимое хранилище файлов                         | filer UI на `127.0.0.1:8888` |
 
 ## Структура
 

@@ -14,6 +14,10 @@ export const ERROR_CODES = [
   'PHONE_TAKEN',
   'CANNOT_DELETE_SELF',
   'CANNOT_DEMOTE_SELF',
+  'CATEGORY_NOT_EMPTY',
+  'FILE_REQUIRED',
+  'FILE_TOO_LARGE',
+  'FILE_TYPE_NOT_ALLOWED',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -24,6 +28,8 @@ export const FIELD_ERROR_CODES = [
   'PASSWORD_TOO_SHORT',
   'TOO_LONG',
   'INVALID_VALUE',
+  'INVALID_URL',
+  'INVALID_DATE',
 ] as const;
 
 export type FieldErrorCode = (typeof FIELD_ERROR_CODES)[number];

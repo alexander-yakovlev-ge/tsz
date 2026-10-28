@@ -1,32 +1,15 @@
 import { z } from 'zod';
-import type { FieldErrorCode } from './errors';
+import { code, phoneField } from './fields';
 import { LOCALES, Locale } from './locales';
-import { normalizePhone } from './phone';
 import { ROLES, Role } from './roles';
 
 export const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
 
-const code = (value: FieldErrorCode) => value;
-
 const passwordField = z
   .string(code('REQUIRED'))
   .min(PASSWORD_MIN_LENGTH, code('PASSWORD_TOO_SHORT'))
   .max(PASSWORD_MAX_LENGTH, code('TOO_LONG'));
-
-const phoneField = z
-  .string(code('REQUIRED'))
-  .trim()
-  .min(1, code('REQUIRED'))
-  .max(32, code('INVALID_PHONE'))
-  .transform((value, ctx) => {
-    const phone = normalizePhone(value);
-    if (!phone) {
-      ctx.addIssue({ code: 'custom', message: code('INVALID_PHONE') });
-      return z.NEVER;
-    }
-    return phone;
-  });
 
 /** Необязательное имя: пустая строка сохраняется как null. */
 const nameField = z

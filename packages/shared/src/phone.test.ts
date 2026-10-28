@@ -1,4 +1,4 @@
-import { normalizePhone } from './phone';
+import { formatPhone, normalizePhone, whatsappChatUrl } from './phone';
 
 describe('normalizePhone', () => {
   it('treats numbers without country code as Georgian', () => {
@@ -16,5 +16,19 @@ describe('normalizePhone', () => {
     expect(normalizePhone('')).toBeNull();
     expect(normalizePhone('12')).toBeNull();
     expect(normalizePhone('hello')).toBeNull();
+  });
+});
+
+describe('formatPhone', () => {
+  it('formats E.164 for display and keeps anything else', () => {
+    expect(formatPhone('+995555123456')).toBe('+995 555 12 34 56');
+    expect(formatPhone('—')).toBe('—');
+  });
+});
+
+describe('whatsappChatUrl', () => {
+  it('builds a wa.me link without the plus', () => {
+    expect(whatsappChatUrl('+995555123456')).toBe('https://wa.me/995555123456');
+    expect(whatsappChatUrl('555 12 34 56')).toBeNull();
   });
 });
