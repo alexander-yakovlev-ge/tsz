@@ -1,10 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Этап 1: инфраструктура', () => {
-  test('главная открывается через Caddy и видит API', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('ТСЖ');
-    await expect(page.getByTestId('api-status')).toHaveText('ok');
+  test('главная открывается через Caddy', async ({ page }) => {
+    await page.goto('/ru');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Тамар Мепе, 1');
   });
 
   test('/api/health сообщает о доступности БД и хранилища', async ({ request }) => {

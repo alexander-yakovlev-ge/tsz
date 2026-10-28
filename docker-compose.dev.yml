@@ -46,4 +46,5 @@ services:
       WATCHPACK_POLLING: 'true'
     volumes:
       - ./apps/web/src:/app/apps/web/src
+      - ./apps/web/messages:/app/apps/web/messages
       - ./packages/shared/src:/app/packages/shared/src

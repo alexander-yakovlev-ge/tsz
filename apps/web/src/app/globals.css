@@ -1,9 +1,18 @@
 @import 'tailwindcss';
 
+/* Оформление — вариант C (ТЗ п. 12): Manrope для латиницы и кириллицы, Noto Sans Georgian для грузинского. */
+@theme {
+  --font-sans:
+    'Manrope Variable', 'Noto Sans Georgian Variable', ui-sans-serif, system-ui, sans-serif;
+  --color-ink: #111827;
+  --color-accent: #0f766e;
+  --color-accent-strong: #115e59;
+}
+
 :root {
   color-scheme: light;
 }
 
 body {
-  @apply bg-white text-slate-900 antialiased;
+  @apply bg-gray-50 text-ink antialiased;
 }

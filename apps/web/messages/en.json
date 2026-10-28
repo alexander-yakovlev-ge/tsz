@@ -1,0 +1,136 @@
+{
+  "meta": {
+    "siteName": "Tamar Mepe 1",
+    "description": "Homeowners association website: 1 Tamar Mepe Ave, Batumi"
+  },
+  "brand": {
+    "tagline": "HOA · Batumi"
+  },
+  "nav": {
+    "main": "Main menu",
+    "home": "Home",
+    "account": "Account",
+    "admin": "Admin",
+    "login": "Sign in",
+    "logout": "Sign out",
+    "language": "Language"
+  },
+  "home": {
+    "photoAlt": "The building at 1 Tamar Mepe Avenue",
+    "eyebrow": "Homeowners association · Batumi",
+    "title": "Tamar Mepe 1",
+    "lead": "Everything about the building in one place: announcements, documents and the balance of your unit.",
+    "account": "My account"
+  },
+  "footer": {
+    "name": "Tamar Mepe 1 Homeowners Association",
+    "address": "1 Tamar Mepe Ave, Batumi"
+  },
+  "login": {
+    "title": "Sign in",
+    "intro": "Use the phone number and password you received from the administrator.",
+    "phone": "Phone",
+    "phoneHint": "For example, 555 12 34 56",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…"
+  },
+  "account": {
+    "title": "My account",
+    "greeting": "Hello, {name}!",
+    "greetingNoName": "Hello!",
+    "noUnits": "No units are linked to your account yet.",
+    "security": "Security",
+    "changePassword": "Change password"
+  },
+  "changePassword": {
+    "title": "Change password",
+    "current": "Current password",
+    "new": "New password",
+    "newHint": "At least 8 characters",
+    "confirm": "Repeat new password",
+    "submit": "Change password",
+    "submitting": "Saving…",
+    "success": "Password changed. Sessions on other devices have been ended.",
+    "mismatch": "Passwords do not match",
+    "back": "← My account"
+  },
+  "admin": {
+    "title": "Administration",
+    "nav": "Administration sections",
+    "dashboard": "Overview",
+    "users": "Users",
+    "dashboardIntro": "Debts, recent transactions and scheduled announcements will appear here.",
+    "usersCard": "Accounts of residents and administrators"
+  },
+  "users": {
+    "title": "Users",
+    "add": "Add user",
+    "newTitle": "New user",
+    "editTitle": "User details",
+    "empty": "No users",
+    "phone": "Phone",
+    "name": "Name",
+    "role": "Role",
+    "language": "Notification language",
+    "createdAt": "Created",
+    "you": "you",
+    "roles": {
+      "ADMIN": "Administrator",
+      "RESIDENT": "Resident"
+    },
+    "languages": {
+      "ka": "ქართული",
+      "ru": "Русский",
+      "en": "English"
+    },
+    "password": "Password",
+    "passwordHint": "Leave empty to generate a password",
+    "create": "Create",
+    "creating": "Creating…",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Changes saved",
+    "back": "← All users",
+    "selfRoleNote": "You cannot remove your own administrator role.",
+    "resetTitle": "Reset password",
+    "resetHint": "Leave the field empty to generate a password. All of the user's sessions will end.",
+    "newPassword": "New password",
+    "reset": "Reset password",
+    "resetting": "Resetting…",
+    "resetConfirm": "Reset the password? All of the user's sessions will end.",
+    "resetDone": "Password changed",
+    "temporaryPassword": "Temporary password",
+    "temporaryPasswordNote": "Give it to the user. The password is shown only once.",
+    "deleteTitle": "Delete",
+    "deleteHint": "The user will no longer be able to sign in. The phone number can be reused.",
+    "delete": "Delete user",
+    "deleteConfirm": "Delete user {phone}?",
+    "toList": "Back to users"
+  },
+  "errors": {
+    "VALIDATION": "Please check the form",
+    "UNAUTHORIZED": "Please sign in",
+    "FORBIDDEN": "Access denied",
+    "NOT_FOUND": "Not found",
+    "ORIGIN_MISMATCH": "Request rejected",
+    "INVALID_CREDENTIALS": "Wrong phone or password",
+    "TOO_MANY_ATTEMPTS": "Too many attempts. Try again in 15 minutes.",
+    "WRONG_PASSWORD": "Current password is wrong",
+    "PHONE_TAKEN": "A user with this phone already exists",
+    "CANNOT_DELETE_SELF": "You cannot delete yourself",
+    "CANNOT_DEMOTE_SELF": "You cannot remove your own administrator role",
+    "REQUIRED": "Required field",
+    "INVALID_PHONE": "Invalid phone number",
+    "PASSWORD_TOO_SHORT": "Password must be at least 8 characters",
+    "TOO_LONG": "Value is too long",
+    "INVALID_VALUE": "Invalid value",
+    "NETWORK": "Cannot reach the server. Check your connection.",
+    "UNKNOWN": "Something went wrong. Please try again."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "The link may be outdated or contain a typo.",
+    "home": "Go to home page"
+  }
+}

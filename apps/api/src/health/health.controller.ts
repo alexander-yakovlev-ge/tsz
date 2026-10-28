@@ -1,8 +1,10 @@
 import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { HealthReport } from '@tsz/shared';
+import { Public } from '../auth/decorators';
 import { HealthService } from './health.service';
 
 @Controller('health')
+@Public()
 export class HealthController {
   constructor(private readonly health: HealthService) {}
 
