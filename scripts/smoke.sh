@@ -40,6 +40,11 @@ check 'storage listing is closed' "$BASE_URL/files/" 403
 check 'admin without session → login' "$BASE_URL/ru/admin" 307
 check 'session without cookie' "$BASE_URL/api/auth/session" 200 '"user":null'
 check 'users API without session' "$BASE_URL/api/users" 401
+check 'units API without session' "$BASE_URL/api/units" 401
+check 'owners API without session' "$BASE_URL/api/owners" 401
+check 'my units without session' "$BASE_URL/api/me/units" 401
+check 'unit documents without session' "$BASE_URL/api/units/00000000-0000-4000-8000-000000000000/documents" 401
+check 'admin units without session → login' "$BASE_URL/ru/admin/units" 307
 check 'unknown page' "$BASE_URL/ru/does-not-exist" 404
 check 'unknown api route' "$BASE_URL/api/does-not-exist" 404
 HTTP_URL=$(echo "$BASE_URL" | sed 's#^https:#http:#')

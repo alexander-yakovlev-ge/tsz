@@ -113,3 +113,29 @@ export function uploadDocument(
     multipart: { ...fields, file },
   });
 }
+
+/** CSV для импорта (ТЗ п. 8.10): шаг units или owners, предпросмотр или применение. */
+export function importCsv(
+  request: APIRequestContext,
+  step: 'units' | 'owners',
+  action: 'preview' | 'commit',
+  csv: Buffer | string,
+  resolutions?: Record<string, string>,
+): Promise<APIResponse> {
+  return request.post(`/api/import/${step}/${action}`, {
+    headers: ORIGIN,
+    multipart: {
+      file: { name: `${step}.csv`, mimeType: 'text/csv', buffer: Buffer.from(csv) },
+      ...(resolutions ? { resolutions: JSON.stringify(resolutions) } : {}),
+    },
+  });
+}
+
+let cadastralCounter = 0;
+
+/** Кадастровый код вне участка синтетической выписки (05.30.39.005), уникальный между прогонами. */
+export function uniqueCadastralCode(): string {
+  cadastralCounter += 1;
+  const value = String((Date.now() * 10 + cadastralCounter) % 1e10).padStart(10, '0');
+  return `99.${value.slice(0, 2)}.${value.slice(2, 4)}.${value.slice(4, 7)}.01.01.${value.slice(7, 10)}`;
+}

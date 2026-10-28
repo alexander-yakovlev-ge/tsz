@@ -1,6 +1,7 @@
 import type { UserListItem } from '@tsz/shared';
 import type { Metadata } from 'next';
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
+import { OwnerName, UnitName } from '@/components/registry';
 import { buttonClass, PageTitle } from '@/components/ui';
 import { Link } from '@/i18n/navigation';
 import { apiGet, getSession } from '@/lib/api';
@@ -16,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: t('title') };
 }
 
-/** Раздел «Пользователи» (ТЗ п. 8.2). Привязка к собственникам появится на этапе 4. */
+/** Раздел «Пользователи» (ТЗ п. 8.2): с привязанными собственниками и их помещениями. */
 export default async function UsersPage({ params }: Props) {
   const locale = await readLocale(params);
   setRequestLocale(locale);
@@ -41,7 +42,7 @@ export default async function UsersPage({ params }: Props) {
         <p className="text-gray-600">{t('empty')}</p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
-          <table className="w-full min-w-[640px] text-left">
+          <table className="w-full min-w-[760px] text-left">
             <thead className="border-b border-gray-200 text-sm text-gray-600">
               <tr>
                 <th scope="col" className="px-4 py-3 font-semibold">
@@ -49,6 +50,9 @@ export default async function UsersPage({ params }: Props) {
                 </th>
                 <th scope="col" className="px-4 py-3 font-semibold">
                   {t('name')}
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  {t('owners')}
                 </th>
                 <th scope="col" className="px-4 py-3 font-semibold">
                   {t('role')}
@@ -76,6 +80,32 @@ export default async function UsersPage({ params }: Props) {
                     )}
                   </td>
                   <td className="px-4 py-3">{user.name ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    {user.owners.length === 0 ? (
+                      '—'
+                    ) : (
+                      <ul className="flex flex-col gap-1">
+                        {user.owners.map((owner) => (
+                          <li key={owner.id}>
+                            <Link
+                              href={`/admin/owners/${owner.id}`}
+                              className="underline-offset-4 hover:underline"
+                            >
+                              <OwnerName owner={owner} />
+                            </Link>
+                            <span className="text-sm text-gray-600">
+                              {owner.units.map((unit, index) => (
+                                <span key={unit.id}>
+                                  {index > 0 && ', '}
+                                  <UnitName kind={unit.kind} number={unit.number} />
+                                </span>
+                              ))}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{t(`roles.${user.role}`)}</td>
                   <td className="px-4 py-3">{t(`languages.${user.language}`)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">

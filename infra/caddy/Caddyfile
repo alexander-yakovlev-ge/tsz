@@ -14,8 +14,8 @@
 		max_size 25MB
 	}
 
-	# Загрузка документов: файл до 20 МиБ (ТЗ п. 8.6) плюс поля формы multipart.
-	@document_upload path /api/documents /api/documents/*
+	# Загрузка документов и документов помещений: файл до 20 МиБ (ТЗ п. 8.6, 4.19) плюс поля формы multipart.
+	@document_upload path_regexp ^/api/(documents|units/[^/]+/documents)(/.*)?$
 	request_body @document_upload {
 		max_size 21MiB
 	}

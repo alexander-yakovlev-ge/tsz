@@ -18,8 +18,36 @@ import { PrismaService } from '../prisma/prisma.service';
 type CreateUser = z.output<typeof createUserSchema>;
 type UpdateUser = z.output<typeof updateUserSchema>;
 
-function toListItem(user: User): UserListItem {
-  return { ...toSessionUser(user), createdAt: user.createdAt.toISOString() };
+const userInclude = {
+  owners: {
+    include: {
+      ownerships: {
+        where: { unit: { status: 'ACTIVE' } },
+        include: { unit: true },
+        orderBy: { unit: { sortKey: 'asc' } },
+      },
+    },
+    orderBy: { registryName: 'asc' },
+  },
+} satisfies Prisma.UserInclude;
+type UserWithOwners = Prisma.UserGetPayload<{ include: typeof userInclude }>;
+
+function toListItem(user: UserWithOwners): UserListItem {
+  return {
+    ...toSessionUser(user),
+    createdAt: user.createdAt.toISOString(),
+    owners: user.owners.map((owner) => ({
+      id: owner.id,
+      kind: owner.kind,
+      registryName: owner.registryName,
+      displayName: owner.displayName,
+      units: owner.ownerships.map(({ unit }) => ({
+        id: unit.id,
+        kind: unit.kind,
+        number: unit.number,
+      })),
+    })),
+  };
 }
 
 function isPhoneConflict(error: unknown): boolean {
@@ -37,13 +65,17 @@ export class UsersService {
   async list(): Promise<UserListItem[]> {
     const users = await this.prisma.user.findMany({
       where: { deletedAt: null },
+      include: userInclude,
       orderBy: { createdAt: 'asc' },
     });
     return users.map(toListItem);
   }
 
   async get(id: string): Promise<UserListItem> {
-    return toListItem(await this.findActive(id));
+    await this.findActive(id);
+    return toListItem(
+      await this.prisma.user.findUniqueOrThrow({ where: { id }, include: userInclude }),
+    );
   }
 
   async create(
@@ -62,6 +94,7 @@ export class UsersService {
           language: input.language,
           passwordHash: await hashPassword(input.password ?? temporaryPassword!),
         },
+        include: userInclude,
       })
       .catch((error: unknown) => {
         throw isPhoneConflict(error) ? new ApiError(HttpStatus.CONFLICT, 'PHONE_TAKEN') : error;
@@ -106,6 +139,7 @@ export class UsersService {
           ...input,
           ...(changes.role ? { tokenVersion: { increment: 1 } } : {}),
         },
+        include: userInclude,
       })
       .catch((error: unknown) => {
         throw isPhoneConflict(error) ? new ApiError(HttpStatus.CONFLICT, 'PHONE_TAKEN') : error;
@@ -150,22 +184,28 @@ export class UsersService {
     return { user, ...(temporaryPassword ? { temporaryPassword } : {}) };
   }
 
-  /** Мягкое удаление (ТЗ п. 8.2). Push-подписки и привязка к собственникам появятся на этапах 4 и 6. */
+  /**
+   * Мягкое удаление (ТЗ п. 8.2): учётная запись отвязывается от собственников, их права
+   * на помещения сохраняются. Push-подписки появятся на этапе 6.
+   */
   async remove(actor: SessionUser, id: string, ip?: string): Promise<void> {
     if (id === actor.id) {
       throw new ApiError(HttpStatus.BAD_REQUEST, 'CANNOT_DELETE_SELF');
     }
     const user = await this.findActive(id);
-    await this.prisma.user.update({
-      where: { id },
-      data: { deletedAt: new Date(), tokenVersion: { increment: 1 } },
-    });
+    const [unlinked] = await this.prisma.$transaction([
+      this.prisma.owner.updateMany({ where: { userId: id }, data: { userId: null } }),
+      this.prisma.user.update({
+        where: { id },
+        data: { deletedAt: new Date(), tokenVersion: { increment: 1 } },
+      }),
+    ]);
     await this.audit.log({
       userId: actor.id,
       action: 'user.delete',
       entity: 'user',
       entityId: id,
-      payload: { phone: user.phone },
+      payload: { phone: user.phone, unlinkedOwners: unlinked.count },
       ip,
     });
   }

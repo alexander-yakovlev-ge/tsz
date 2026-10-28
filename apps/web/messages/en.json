@@ -90,7 +90,20 @@
     "greetingNoName": "Hello!",
     "noUnits": "No units are linked to your account yet.",
     "security": "Security",
-    "changePassword": "Change password"
+    "changePassword": "Change password",
+    "units": "Units",
+    "floor": "Floor",
+    "area": "Area",
+    "areaValue": "{area, number} m²",
+    "owners": "Owners",
+    "you": "you",
+    "documents": "Unit documents",
+    "myData": "How to call you",
+    "displayNameSaved": "Name saved",
+    "registryName": "In the registry",
+    "displayName": "Display name",
+    "displayNameHint": "For example, in Latin or Cyrillic. Empty — the registry name.",
+    "save": "Save"
   },
   "changePassword": {
     "title": "Change password",
@@ -125,6 +138,18 @@
     "dashboard": "Overview",
     "dashboardIntro": "Debts, recent transactions and scheduled announcements will appear here.",
     "sections": {
+      "units": {
+        "title": "Units",
+        "card": "Unit registry, owners and documents"
+      },
+      "owners": {
+        "title": "Owners",
+        "card": "Registry owners, accounts, duplicates"
+      },
+      "import": {
+        "title": "Import",
+        "card": "Load units and owners from the registry extract"
+      },
       "announcements": {
         "title": "Announcements",
         "card": "Publish, pin and withdraw announcements"
@@ -278,7 +303,10 @@
     "deleteHint": "The user will no longer be able to sign in. The phone number can be reused.",
     "delete": "Delete user",
     "deleteConfirm": "Delete user {phone}?",
-    "toList": "Back to users"
+    "toList": "Back to users",
+    "owners": "Owners",
+    "noOwners": "The account is not linked to any owner.",
+    "ownersHint": "Linking is done on the owner’s page."
   },
   "errors": {
     "VALIDATION": "Please check the form",
@@ -304,11 +332,250 @@
     "FILE_TOO_LARGE": "The file is larger than 20 MB",
     "FILE_TYPE_NOT_ALLOWED": "Unsupported format: only PDF, DOCX, XLSX, JPG, PNG",
     "INVALID_URL": "Invalid link",
-    "INVALID_DATE": "Invalid date"
+    "INVALID_DATE": "Invalid date",
+    "CADASTRAL_CODE_TAKEN": "A unit with this cadastral code already exists",
+    "OWNERSHIP_EXISTS": "This owner is already linked to the unit",
+    "OWNER_HAS_UNITS": "The owner has units — remove them first",
+    "OWNER_MERGE_SELF": "A record cannot be merged into itself",
+    "USER_NOT_FOUND": "Account not found",
+    "IMPORT_NOT_READY": "The data changed or the file has errors — check it again"
   },
   "notFound": {
     "title": "Page not found",
     "text": "The link may be outdated or contain a typo.",
     "home": "Go to home page"
+  },
+  "units": {
+    "label": {
+      "APARTMENT": "Apartment {number}",
+      "PARKING": "Parking space {number}",
+      "COMMERCIAL": "Commercial unit {number}",
+      "TECHNICAL": "Technical unit {number}"
+    },
+    "kinds": {
+      "APARTMENT": "Apartment",
+      "PARKING": "Parking space",
+      "COMMERCIAL": "Commercial",
+      "TECHNICAL": "Technical"
+    },
+    "categories": {
+      "FULL": "Full",
+      "BLACK_FRAME": "Black frame",
+      "PENSIONER": "Pensioner"
+    },
+    "ownerKinds": {
+      "PERSON": "Individual",
+      "COMPANY": "Company"
+    },
+    "noContact": "No contact",
+    "contact": "Contact person"
+  },
+  "pagination": {
+    "label": "Pages",
+    "previous": "← Previous",
+    "next": "Next →",
+    "pageOf": "Page {page} of {count}"
+  },
+  "ownerSearch": {
+    "placeholder": "Name, document number, unit or phone",
+    "search": "Search",
+    "nothing": "Nothing found",
+    "noUnits": "No units"
+  },
+  "adminUnits": {
+    "title": "Units",
+    "add": "Add unit",
+    "search": "Search",
+    "searchPlaceholder": "Number, cadastral code, owner, phone",
+    "kind": "Type",
+    "all": "All",
+    "category": "Category",
+    "merged": "Merged",
+    "apply": "Show",
+    "found": "Found: {count}",
+    "unit": "Unit",
+    "owners": "Owners",
+    "area": "Area",
+    "noOwners": "No owners",
+    "areaValue": "{area, number} m²",
+    "saved": "Saved",
+    "cadastralCode": "Cadastral code",
+    "cadastralCodeHint": "As in the registry extract, e.g. 05.30.39.005.01.01.045",
+    "number": "Number",
+    "numberHint": "As in the registry: 45, 5ა",
+    "areaM2": "Area, m²",
+    "floor": "Floor",
+    "floorLabel": "Floor label",
+    "floorLabelHint": "For a non-standard floor, e.g. technical",
+    "saving": "Saving…",
+    "save": "Save",
+    "creating": "Creating…",
+    "create": "Create",
+    "newTitle": "New unit",
+    "back": "← To units",
+    "editTitle": "Unit",
+    "mergedBadge": "Merged",
+    "ownersTitle": "Owners",
+    "dataTitle": "Unit details",
+    "documentsTitle": "Unit documents",
+    "deleteTitle": "Delete unit",
+    "deleteHint": "Ownerships and unit documents are deleted with it.",
+    "deleteConfirm": "Delete “{name}”? This cannot be undone.",
+    "delete": "Delete unit",
+    "unlinkConfirm": "Remove owner “{name}” from the unit? Their users will lose access to it.",
+    "noAccount": "No account",
+    "share": "Share",
+    "shareHint": "E.g. 1/2 or 50%; empty — no shares",
+    "shareNote": "Share note",
+    "isContact": "Contact person",
+    "isContactHint": "Main contact for the unit; only one per unit",
+    "unlink": "Remove",
+    "ownerAdded": "Owner added",
+    "addOwner": "Add owner",
+    "addOwnerAction": "Add",
+    "newOwnerHint": "Not in the list? <link>Create the owner</link> and add them here."
+  },
+  "unitDocuments": {
+    "uploaded": "Document uploaded",
+    "deleteConfirm": "Delete document “{name}”?",
+    "empty": "No documents",
+    "kinds": {
+      "REGISTRY_EXTRACT": "Registry extract",
+      "OTHER": "Document"
+    },
+    "delete": "Delete",
+    "uploadTitle": "Upload document",
+    "kind": "Type",
+    "title": "Title (optional)",
+    "file": "File",
+    "fileHint": "PDF, DOCX, XLSX, JPG or PNG, up to 20 MB",
+    "uploading": "Uploading…",
+    "upload": "Upload"
+  },
+  "adminOwners": {
+    "title": "Owners",
+    "add": "Add owner",
+    "search": "Search",
+    "searchPlaceholder": "Name, document number, unit, phone",
+    "kind": "Type",
+    "all": "All",
+    "noUser": "No account",
+    "noUnits": "No units",
+    "apply": "Show",
+    "found": "Found: {count}",
+    "name": "Name",
+    "units": "Units",
+    "account": "Account",
+    "noUnitsShort": "No units",
+    "saved": "Saved",
+    "registryName": "Registry name",
+    "registryNameHint": "As in the extract, in Georgian script",
+    "displayName": "Display name",
+    "displayNameHint": "In Latin or Cyrillic; if empty, the registry name is shown",
+    "idNumbers": "Document numbers",
+    "idNumbersHint": "Personal number, passport, company ID — one per line. Visible to administrators only.",
+    "note": "Note",
+    "saving": "Saving…",
+    "save": "Save",
+    "creating": "Creating…",
+    "create": "Create",
+    "newTitle": "New owner",
+    "back": "← To owners",
+    "editTitle": "Owner",
+    "unitsTitle": "Units and shares",
+    "accountTitle": "Account",
+    "dataTitle": "Owner details",
+    "mergeTitle": "Merge a duplicate",
+    "mergeHint": "If the same person is recorded twice, find the duplicate: its units, document numbers and account move here and the duplicate is deleted.",
+    "deleteTitle": "Delete owner",
+    "deleteHint": "Only an owner without units can be deleted.",
+    "deleteConfirm": "Delete owner “{name}”?",
+    "delete": "Delete owner",
+    "linked": "Account linked",
+    "unlinkConfirm": "Unlink the account? The user will lose access to this owner’s units.",
+    "unlink": "Unlink",
+    "noAccountHint": "No account linked — the owner cannot sign in.",
+    "replaceAccount": "Replace account",
+    "linkAccount": "Link an account",
+    "linkMode": "Method",
+    "modes": {
+      "existing": "Existing",
+      "new": "New"
+    },
+    "existingUser": "Account",
+    "linkExisting": "Link",
+    "createAndLink": "Create and link",
+    "mergeConfirm": "Merge “{duplicate}” into “{primary}”? The duplicate will be deleted.",
+    "merged": "Duplicate merged into this record",
+    "mergeSearch": "Find the duplicate",
+    "mergeAction": "Merge here"
+  },
+  "adminImport": {
+    "title": "Import from the registry",
+    "intro": "Upload units first, then owners. Each file is checked first: the import runs only when it has no errors and every ambiguous match is resolved. Uploading the same file again changes nothing.",
+    "steps": "Import steps",
+    "stepTitle": "Step {number}. {name}",
+    "units": {
+      "title": "Units",
+      "hint": "units.csv: cadastral_code, kind, number, floor, floor_label, area_m2, tariff_category. Existing units are updated from the file."
+    },
+    "owners": {
+      "title": "Owners",
+      "hint": "owners.csv: cadastral_code, owner_key, owner_kind, registry_name, id_numbers, share, share_note, is_contact. Owners are matched by document numbers, then by name."
+    },
+    "file": "File {name}",
+    "done": "Import complete. Created: {create}, updated: {update}, unchanged: {unchanged}.",
+    "recheck": "Check again",
+    "check": "Check",
+    "commit": "Import",
+    "previewTitle": "Check result",
+    "summary": {
+      "create": "Create: {count}",
+      "update": "Update: {count}",
+      "unchanged": "Unchanged: {count}",
+      "error": "Errors: {count}",
+      "newOwners": "New owners: {count}",
+      "ambiguous": "Ambiguous: {count}"
+    },
+    "notReadyErrors": "Fix the errors in the file and upload it again.",
+    "notReadyAmbiguous": "Resolve the ambiguous matches and press “Check again”.",
+    "ambiguousTitle": "Ambiguous matches",
+    "ambiguousHint": "Choose who this is. Left to resolve: {count}.",
+    "keyLines": "key {key}, lines {lines}",
+    "sameAsOwner": "This is {name}",
+    "sameAsKey": "Same person as key {key} ({name})",
+    "reasons": {
+      "ID_NUMBER": "document number matches",
+      "NAME_EXACT": "same name",
+      "NAME_SIMILAR": "similar name"
+    },
+    "candidateUnits": "units: {units}",
+    "newOwner": "Someone else — a new owner",
+    "showAll": "Show all rows",
+    "nothingToShow": "No errors or changes",
+    "line": "Line",
+    "row": "Record",
+    "action": "Action",
+    "details": "Details",
+    "actions": {
+      "create": "Create",
+      "update": "Update",
+      "unchanged": "Unchanged",
+      "error": "Error",
+      "pending": "Needs a decision"
+    },
+    "issues": {
+      "INVALID_CSV": "The file is not a UTF-8 CSV",
+      "EMPTY_FILE": "The file has no rows",
+      "MISSING_COLUMN": "Required column is missing",
+      "REQUIRED": "Empty",
+      "INVALID_VALUE": "Invalid value",
+      "TOO_LONG": "Value is too long",
+      "DUPLICATE_ROW": "Duplicate row",
+      "UNKNOWN_UNIT": "No unit with this code — import units.csv first",
+      "OWNER_MISMATCH": "Other rows of this key have a different name or kind",
+      "ID_NUMBER_SHARED": "This document number already belongs to another key",
+      "TOO_MANY_CONTACTS": "The unit has more than one contact person"
+    }
   }
 }
