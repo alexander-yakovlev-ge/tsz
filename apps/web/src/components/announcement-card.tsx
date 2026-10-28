@@ -21,7 +21,7 @@ export async function AnnouncementCard({
   return (
     <article
       data-testid="announcement"
-      className={`flex flex-col gap-2 rounded-2xl border p-5 ${
+      className={`flex flex-col gap-2 rounded-2xl border p-5 break-words ${
         announcement.isPinned ? 'border-accent/40 bg-accent/5' : 'border-gray-200 bg-white'
       }`}
     >
