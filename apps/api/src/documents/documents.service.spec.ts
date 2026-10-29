@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import type { SessionUser } from '@tsz/shared';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { UnitAccessService } from '../registry/unit-access.service';
 import { StorageService } from '../storage/storage.service';
 import { cleanFilename, DocumentsService, visibleTo } from './documents.service';
 
@@ -24,10 +25,14 @@ const fields = {
 };
 
 describe('visibleTo', () => {
-  it('shows PUBLIC to guests and residents, everything to admins', () => {
-    expect(visibleTo(undefined)).toEqual(['PUBLIC']);
-    expect(visibleTo({ ...admin, role: 'RESIDENT' })).toEqual(['PUBLIC']);
-    expect(visibleTo(admin)).toEqual(['PUBLIC', 'OWNERS', 'PRIVATE']);
+  it('shows PUBLIC to guests and residents without units, everything to admins', () => {
+    expect(visibleTo(undefined, false)).toEqual(['PUBLIC']);
+    expect(visibleTo({ ...admin, role: 'RESIDENT' }, false)).toEqual(['PUBLIC']);
+    expect(visibleTo(admin, false)).toEqual(['PUBLIC', 'OWNERS', 'PRIVATE']);
+  });
+
+  it('adds OWNERS for users of a unit', () => {
+    expect(visibleTo({ ...admin, role: 'RESIDENT' }, true)).toEqual(['PUBLIC', 'OWNERS']);
   });
 });
 
@@ -58,6 +63,7 @@ describe('DocumentsService', () => {
       providers: [
         DocumentsService,
         { provide: PrismaService, useValue: prisma },
+        { provide: UnitAccessService, useValue: { hasUnits: jest.fn() } },
         { provide: StorageService, useValue: storage },
         { provide: AuditService, useValue: audit },
       ],

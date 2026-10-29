@@ -26,7 +26,11 @@ export function useFileSize() {
 }
 
 /** Дата загрузки, размер и формат документа (ТЗ п. 6.3). */
-export function DocumentMeta({ document }: { document: DocumentItem }) {
+export function DocumentMeta({
+  document,
+}: {
+  document: Pick<DocumentItem, 'createdAt' | 'fileSize' | 'mimeType'>;
+}) {
   const format = useFormatter();
   const fileSize = useFileSize();
   return (

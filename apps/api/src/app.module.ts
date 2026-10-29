@@ -10,6 +10,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
 import { MeController } from './me/me.controller';
 import { PrismaModule } from './prisma/prisma.module';
+import { RegistryModule } from './registry/registry.module';
 import { StorageModule } from './storage/storage.module';
 import { TestApiController } from './test-api/test-api.controller';
 import { UsersModule } from './users/users.module';
@@ -26,6 +27,7 @@ import { UsersModule } from './users/users.module';
     ContentModule,
     AnnouncementsModule,
     DocumentsModule,
+    RegistryModule,
   ],
   controllers: [MeController, ...(env.enableTestApi ? [TestApiController] : [])],
 })

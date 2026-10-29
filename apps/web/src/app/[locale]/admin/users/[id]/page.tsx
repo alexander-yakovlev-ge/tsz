@@ -2,6 +2,7 @@ import type { UserListItem } from '@tsz/shared';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
+import { OwnerName, UnitName } from '@/components/registry';
 import { Card, PageTitle } from '@/components/ui';
 import { Link } from '@/i18n/navigation';
 import { apiGet, getSession } from '@/lib/api';
@@ -51,6 +52,34 @@ export default async function EditUserPage({ params }: Props) {
       </PageTitle>
       <Card>
         <UserForm user={user} isSelf={isSelf} />
+      </Card>
+      <Card>
+        <h2 className="mb-2 text-xl font-bold">{t('owners')}</h2>
+        {user.owners.length === 0 ? (
+          <p className="text-sm text-gray-600">{t('noOwners')}</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {user.owners.map((owner) => (
+              <li key={owner.id} className="flex flex-col">
+                <Link
+                  href={`/admin/owners/${owner.id}`}
+                  className="font-bold text-accent underline-offset-4 hover:underline"
+                >
+                  <OwnerName owner={owner} />
+                </Link>
+                <span className="text-sm text-gray-600">
+                  {owner.units.map((unit, index) => (
+                    <span key={unit.id}>
+                      {index > 0 && ', '}
+                      <UnitName kind={unit.kind} number={unit.number} />
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-sm text-gray-600">{t('ownersHint')}</p>
       </Card>
       <Card>
         <h2 className="mb-2 text-xl font-bold">{t('resetTitle')}</h2>

@@ -39,6 +39,8 @@ model User {
   auditLogs     AuditLog[]
   announcements Announcement[]
   documents     Document[]
+  owners        Owner[]
+  unitDocuments UnitDocument[]
 
   @@index([phone])
   @@map("users")
@@ -142,6 +144,122 @@ model Announcement {
 
   @@index([isPinned, publishedAt])
   @@map("announcements")
+}
+
+enum UnitKind {
+  APARTMENT
+  PARKING
+  COMMERCIAL
+  TECHNICAL
+}
+
+enum TariffCategory {
+  FULL
+  BLACK_FRAME
+  PENSIONER
+}
+
+enum UnitStatus {
+  ACTIVE
+  /// Нет в свежей выписке: не участвует в начислениях и голосовании, история сохраняется
+  ARCHIVED
+}
+
+/// Помещение — юридическая единица по выписке из реестра (ТЗ п. 4.2).
+model Unit {
+  id             String          @id @default(uuid()) @db.Uuid
+  kind           UnitKind
+  /// Ключ импорта и синхронизации с выпиской
+  cadastralCode  String          @unique @map("cadastral_code")
+  /// Как в реестре: «45», «5ა»
+  number         String
+  /// Натуральная сортировка: вид, число, суффикс (unitSortKey в @tsz/shared)
+  sortKey        String          @map("sort_key")
+  floor          Int?
+  floorLabel     String?         @map("floor_label")
+  areaM2         Decimal         @map("area_m2") @db.Decimal(8, 2)
+  /// Обязательна для квартир, NULL для остальных видов
+  tariffCategory TariffCategory? @map("tariff_category")
+  /// Операции по балансу — этап 5
+  balance        Decimal         @default(0) @db.Decimal(10, 2)
+  status         UnitStatus      @default(ACTIVE)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  ownerships UnitOwnership[]
+  documents  UnitDocument[]
+
+  @@index([sortKey])
+  @@map("units")
+}
+
+enum OwnerKind {
+  PERSON
+  COMPANY
+}
+
+/// Собственник по реестру; существует независимо от учётной записи (ТЗ п. 4.3).
+model Owner {
+  id           String    @id @default(uuid()) @db.Uuid
+  kind         OwnerKind
+  registryName String    @map("registry_name")
+  displayName  String?   @map("display_name")
+  /// Нормализованные номера документов, каждый зашифрован (OwnerIdsService). Только для ADMIN
+  idNumbers    String[]  @map("id_numbers")
+  /// HMAC нормализованных номеров — поиск совпадений без расшифровки
+  idHashes     String[]  @map("id_hashes")
+  userId       String?   @map("user_id") @db.Uuid
+  user         User?     @relation(fields: [userId], references: [id])
+  note         String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  ownerships UnitOwnership[]
+
+  @@index([idHashes], type: Gin)
+  @@index([userId])
+  @@map("owners")
+}
+
+/// Право собственности (ТЗ п. 4.3.1). Одно контактное лицо на помещение — частичный индекс в миграции.
+model UnitOwnership {
+  id        String  @id @default(uuid()) @db.Uuid
+  unitId    String  @map("unit_id") @db.Uuid
+  unit      Unit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  ownerId   String  @map("owner_id") @db.Uuid
+  owner     Owner   @relation(fields: [ownerId], references: [id])
+  shareNum  Int?    @map("share_num")
+  shareDen  Int?    @map("share_den")
+  shareNote String? @map("share_note")
+  isContact Boolean @default(false) @map("is_contact")
+
+  @@unique([unitId, ownerId])
+  @@index([ownerId])
+  @@map("unit_ownerships")
+}
+
+enum UnitDocumentKind {
+  REGISTRY_EXTRACT
+  OTHER
+}
+
+/// Документ помещения: видят администраторы и пользователи помещения (ТЗ п. 4.19).
+model UnitDocument {
+  id               String           @id @default(uuid()) @db.Uuid
+  unitId           String           @map("unit_id") @db.Uuid
+  unit             Unit             @relation(fields: [unitId], references: [id])
+  kind             UnitDocumentKind
+  title            String?
+  storageKey       String           @unique @map("storage_key")
+  originalFilename String           @map("original_filename")
+  fileSize         Int              @map("file_size")
+  mimeType         String           @map("mime_type")
+  uploadedBy       String           @map("uploaded_by") @db.Uuid
+  uploader         User             @relation(fields: [uploadedBy], references: [id])
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  @@index([unitId, createdAt])
+  @@map("unit_documents")
 }
 
 /// Журнал административных и системных операций (ТЗ п. 4.17).

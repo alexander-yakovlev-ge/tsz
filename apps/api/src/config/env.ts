@@ -26,6 +26,17 @@ export const env = {
     }
     return secret;
   },
+  /**
+   * Ключ шифрования номеров документов собственников (ТЗ п. 4.3, 11). Из него выводятся
+   * ключи AES-GCM и HMAC. Смена ключа без перешифрования делает номера нечитаемыми.
+   */
+  get idNumbersKey(): string {
+    const key = required('ID_NUMBERS_KEY');
+    if (key.length < 32) {
+      throw new Error('ID_NUMBERS_KEY must be at least 32 characters');
+    }
+    return key;
+  },
   /** Тестовый API для e2e (/api/test/*). В продакшене выключен. */
   get enableTestApi(): boolean {
     return optional('ENABLE_TEST_API', 'false') === 'true';

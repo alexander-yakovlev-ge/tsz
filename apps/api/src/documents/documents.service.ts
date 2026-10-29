@@ -16,6 +16,7 @@ import { AuditService } from '../audit/audit.service';
 import { ApiError } from '../common/api-error';
 import { isUuid } from '../common/ids';
 import { PrismaService } from '../prisma/prisma.service';
+import { UnitAccessService } from '../registry/unit-access.service';
 import { StorageService } from '../storage/storage.service';
 import { detectDocumentType } from './file-type';
 
@@ -29,11 +30,14 @@ export interface IncomingFile {
 }
 
 /**
- * Какие документы видит пользователь (ТЗ п. 4.9, 6.3): гость — PUBLIC, администратор — все.
- * OWNERS станут доступны пользователям помещений на этапе 4, когда появятся собственники.
+ * Какие документы видит пользователь (ТЗ п. 4.9, 6.3): гость — PUBLIC, администратор — все,
+ * пользователь с действующим помещением — ещё и OWNERS (ТЗ v1.10).
  */
-export function visibleTo(user: SessionUser | undefined): DocumentVisibility[] {
-  return user?.role === 'ADMIN' ? ['PUBLIC', 'OWNERS', 'PRIVATE'] : ['PUBLIC'];
+export function visibleTo(user: SessionUser | undefined, hasUnits: boolean): DocumentVisibility[] {
+  if (user?.role === 'ADMIN') {
+    return ['PUBLIC', 'OWNERS', 'PRIVATE'];
+  }
+  return user && hasUnits ? ['PUBLIC', 'OWNERS'] : ['PUBLIC'];
 }
 
 /**
@@ -83,17 +87,24 @@ export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly access: UnitAccessService,
     private readonly audit: AuditService,
   ) {}
+
+  private async visibility(user: SessionUser | undefined): Promise<DocumentVisibility[]> {
+    const hasUnits = user?.role === 'RESIDENT' ? await this.access.hasUnits(user.id) : false;
+    return visibleTo(user, hasUnits);
+  }
 
   // --- Категории ---
 
   /** Число документов — только видимых пользователю. */
   async listCategories(user: SessionUser | undefined): Promise<DocumentCategoryItem[]> {
+    const visibility = await this.visibility(user);
     const categories = await this.prisma.documentCategory.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: {
-        _count: { select: { documents: { where: { visibility: { in: visibleTo(user) } } } } },
+        _count: { select: { documents: { where: { visibility: { in: visibility } } } } },
       },
     });
     return categories.map(toCategoryItem);
@@ -169,7 +180,7 @@ export class DocumentsService {
   /** Внутри категории — новые первыми (ТЗ п. 6.3). */
   async list(user: SessionUser | undefined): Promise<DocumentItem[]> {
     const documents = await this.prisma.document.findMany({
-      where: { visibility: { in: visibleTo(user) } },
+      where: { visibility: { in: await this.visibility(user) } },
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     });
     return documents.map(toItem);
@@ -294,7 +305,7 @@ export class DocumentsService {
   private async findVisible(user: SessionUser | undefined, id: string): Promise<Document> {
     const document = isUuid(id)
       ? await this.prisma.document.findFirst({
-          where: { id, visibility: { in: visibleTo(user) } },
+          where: { id, visibility: { in: await this.visibility(user) } },
         })
       : null;
     if (!document) {

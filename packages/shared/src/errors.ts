@@ -18,6 +18,12 @@ export const ERROR_CODES = [
   'FILE_REQUIRED',
   'FILE_TOO_LARGE',
   'FILE_TYPE_NOT_ALLOWED',
+  'CADASTRAL_CODE_TAKEN',
+  'OWNERSHIP_EXISTS',
+  'OWNER_HAS_UNITS',
+  'OWNER_MERGE_SELF',
+  'USER_NOT_FOUND',
+  'IMPORT_NOT_READY',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

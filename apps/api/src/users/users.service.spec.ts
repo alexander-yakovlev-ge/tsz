@@ -38,11 +38,16 @@ describe('UsersService', () => {
   let service: UsersService;
   const prisma = {
     user: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
+    owner: { updateMany: jest.fn() },
+    $transaction: jest.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
   };
   const audit = { log: jest.fn() };
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    prisma.$transaction.mockImplementation((operations: Promise<unknown>[]) =>
+      Promise.all(operations),
+    );
     const moduleRef = await Test.createTestingModule({
       providers: [
         UsersService,
@@ -76,7 +81,12 @@ describe('UsersService', () => {
   it('ends the sessions of a user whose role changes', async () => {
     const current = user();
     prisma.user.findFirst.mockResolvedValue(current);
-    prisma.user.update.mockResolvedValue({ ...current, role: 'RESIDENT', tokenVersion: 1 });
+    prisma.user.update.mockResolvedValue({
+      ...current,
+      role: 'RESIDENT',
+      tokenVersion: 1,
+      owners: [],
+    });
     await service.update(actor, OTHER_ID, {
       phone: current.phone,
       name: 'Other',
@@ -99,7 +109,7 @@ describe('UsersService', () => {
   it('keeps sessions when only the name changes', async () => {
     const current = user();
     prisma.user.findFirst.mockResolvedValue(current);
-    prisma.user.update.mockResolvedValue({ ...current, name: 'New' });
+    prisma.user.update.mockResolvedValue({ ...current, name: 'New', owners: [] });
     await service.update(actor, OTHER_ID, {
       phone: current.phone,
       name: 'New',
@@ -120,12 +130,20 @@ describe('UsersService', () => {
     );
   });
 
-  it('soft-deletes and ends sessions', async () => {
+  it('soft-deletes, ends sessions and unlinks owners', async () => {
     prisma.user.findFirst.mockResolvedValue(user());
+    prisma.owner.updateMany.mockResolvedValue({ count: 2 });
     await service.remove(actor, OTHER_ID);
     const data = prisma.user.update.mock.calls[0][0].data;
     expect(data.deletedAt).toBeInstanceOf(Date);
     expect(data.tokenVersion).toEqual({ increment: 1 });
+    expect(prisma.owner.updateMany).toHaveBeenCalledWith({
+      where: { userId: OTHER_ID },
+      data: { userId: null },
+    });
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: { phone: '+995555111111', unlinkedOwners: 2 } }),
+    );
   });
 
   it('answers 404 for a malformed id without querying the database', async () => {

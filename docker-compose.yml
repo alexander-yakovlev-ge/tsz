@@ -70,6 +70,7 @@ services:
     environment:
       <<: *api-env
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env (see .env.example)}
+      ID_NUMBERS_KEY: ${ID_NUMBERS_KEY:?ID_NUMBERS_KEY must be set in .env (see .env.example)}
       ENABLE_TEST_API: ${ENABLE_TEST_API:-false}
       ADMIN_PHONE: ${ADMIN_PHONE}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
@@ -168,9 +169,12 @@ services:
       BASE_URL: https://proxy
       ADMIN_PHONE: ${ADMIN_PHONE}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      FIXTURES_DIR: /fixtures
     volumes:
       - ./e2e/playwright-report:/e2e/playwright-report
       - ./e2e/test-results:/e2e/test-results
+      # Синтетическая выписка (make fixtures) — для e2e импорта этапа 4
+      - ./data/fixtures:/fixtures:ro
     depends_on:
       proxy:
         condition: service_healthy

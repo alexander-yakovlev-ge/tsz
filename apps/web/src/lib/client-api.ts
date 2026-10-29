@@ -8,7 +8,7 @@ export type ApiResult<T> =
  * (ТЗ п. 11). FormData уходит как multipart (загрузка файлов). status = 0 — нет связи с сервером.
  */
 export async function apiRequest<T = void>(
-  method: 'POST' | 'PUT' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<ApiResult<T>> {
