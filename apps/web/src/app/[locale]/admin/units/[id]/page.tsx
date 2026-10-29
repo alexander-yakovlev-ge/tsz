@@ -47,7 +47,7 @@ export default async function UnitPage({ params }: Props) {
         <PageTitle>{title}</PageTitle>
         <span className="flex flex-wrap items-center gap-2 text-gray-600">
           {unit.cadastralCode}
-          {unit.status === 'MERGED' && <Badge tone="amber">{t('mergedBadge')}</Badge>}
+          {unit.status === 'ARCHIVED' && <Badge tone="amber">{t('archivedBadge')}</Badge>}
         </span>
       </div>
       <Card>

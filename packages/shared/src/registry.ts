@@ -10,7 +10,7 @@ export type UnitKind = (typeof UNIT_KINDS)[number];
 export const TARIFF_CATEGORIES = ['FULL', 'BLACK_FRAME', 'PENSIONER'] as const;
 export type TariffCategory = (typeof TARIFF_CATEGORIES)[number];
 
-export const UNIT_STATUSES = ['ACTIVE', 'MERGED'] as const;
+export const UNIT_STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
 export type UnitStatus = (typeof UNIT_STATUSES)[number];
 
 /** Номер как в реестре: число и, возможно, грузинская буква — «45», «5ა». */

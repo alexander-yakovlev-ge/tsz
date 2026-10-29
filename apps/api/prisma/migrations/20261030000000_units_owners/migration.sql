@@ -5,7 +5,7 @@ CREATE TYPE "UnitKind" AS ENUM ('APARTMENT', 'PARKING', 'COMMERCIAL', 'TECHNICAL
 CREATE TYPE "TariffCategory" AS ENUM ('FULL', 'BLACK_FRAME', 'PENSIONER');
 
 -- CreateEnum
-CREATE TYPE "UnitStatus" AS ENUM ('ACTIVE', 'MERGED');
+CREATE TYPE "UnitStatus" AS ENUM ('ACTIVE', 'ARCHIVED');
 
 -- CreateEnum
 CREATE TYPE "OwnerKind" AS ENUM ('PERSON', 'COMPANY');
@@ -26,7 +26,6 @@ CREATE TABLE "units" (
     "tariff_category" "TariffCategory",
     "balance" DECIMAL(10,2) NOT NULL DEFAULT 0,
     "status" "UnitStatus" NOT NULL DEFAULT 'ACTIVE',
-    "merged_into_id" UUID,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -101,9 +100,6 @@ CREATE UNIQUE INDEX "unit_documents_storage_key_key" ON "unit_documents"("storag
 
 -- CreateIndex
 CREATE INDEX "unit_documents_unit_id_created_at_idx" ON "unit_documents"("unit_id", "created_at");
-
--- AddForeignKey
-ALTER TABLE "units" ADD CONSTRAINT "units_merged_into_id_fkey" FOREIGN KEY ("merged_into_id") REFERENCES "units"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "owners" ADD CONSTRAINT "owners_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;

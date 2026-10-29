@@ -42,7 +42,7 @@ export default async function AdminUnitsPage({ params, searchParams }: Props) {
       ? search.category
       : undefined,
     noContact: search.noContact === 'true' ? 'true' : undefined,
-    status: search.status === 'MERGED' ? 'MERGED' : undefined,
+    status: search.status === 'ARCHIVED' ? 'ARCHIVED' : undefined,
   };
   const page = Number(search.page ?? '1');
   if (!Number.isInteger(page) || page < 1) {
@@ -120,11 +120,11 @@ export default async function AdminUnitsPage({ params, searchParams }: Props) {
             <input
               type="checkbox"
               name="status"
-              value="MERGED"
+              value="ARCHIVED"
               defaultChecked={!!query.status}
               className="size-5 accent-accent"
             />
-            {t('merged')}
+            {t('archived')}
           </label>
         </div>
         <button type="submit" className={buttonClass.secondary}>
