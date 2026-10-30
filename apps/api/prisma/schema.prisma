@@ -208,6 +208,8 @@ model Owner {
   idNumbers    String[]  @map("id_numbers")
   /// HMAC нормализованных номеров — поиск совпадений без расшифровки
   idHashes     String[]  @map("id_hashes")
+  /// Контактный телефон из registry.csv (E.164). Только для ADMIN; учётные записи по нему — этап 7
+  phone        String?
   userId       String?   @map("user_id") @db.Uuid
   user         User?     @relation(fields: [userId], references: [id])
   note         String?

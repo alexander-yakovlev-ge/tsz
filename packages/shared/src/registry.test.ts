@@ -1,9 +1,10 @@
 import {
   displayUnitNumber,
   idNumbersField,
+  latinName,
+  nameWithLatin,
   normalizeIdNumber,
   normalizeName,
-  ownershipSchema,
   parseShare,
   searchUnitNumber,
   unitSchema,
@@ -42,6 +43,23 @@ describe('displayUnitNumber', () => {
   });
 });
 
+describe('latinName', () => {
+  it('transliterates Georgian words and capitalizes them', () => {
+    expect(latinName('სალომე ბოლქვაძე')).toBe('Salome Bolkvadze');
+    expect(latinName('შპს "ბათუმი ჰაითს დეველოპმენტი"')).toBe('Shps "Batumi Haits Developmenti"');
+  });
+
+  it('returns null without Georgian letters', () => {
+    expect(latinName('Иван Петров')).toBeNull();
+  });
+
+  it('adds the transliteration in parentheses on ru and en only', () => {
+    expect(nameWithLatin('ანა ბერიძე', 'ru')).toBe('ანა ბერიძე (Ana Beridze)');
+    expect(nameWithLatin('ანა ბერიძე', 'ka')).toBe('ანა ბერიძე');
+    expect(nameWithLatin('Anna Smith', 'en')).toBe('Anna Smith');
+  });
+});
+
 describe('parseShare', () => {
   it('reduces fractions and percents', () => {
     expect(parseShare('1/2')).toEqual({ num: 1, den: 2 });
@@ -56,12 +74,6 @@ describe('parseShare', () => {
     for (const value of ['0/2', '3/2', '1/0', '150%', 'half', '1/2/3']) {
       expect(parseShare(value)).toBeNull();
     }
-  });
-
-  it('is validated by the ownership schema', () => {
-    expect(ownershipSchema.parse({ share: '50%' }).share).toEqual({ num: 1, den: 2 });
-    expect(ownershipSchema.parse({ share: '' }).share).toBeNull();
-    expect(ownershipSchema.safeParse({ share: '2/1' }).success).toBe(false);
   });
 });
 

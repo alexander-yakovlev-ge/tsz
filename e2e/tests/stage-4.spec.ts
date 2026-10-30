@@ -6,7 +6,7 @@ import {
   BASE_URL,
   createUser,
   del,
-  importCsv,
+  importRegistry,
   login,
   post,
   put,
@@ -29,6 +29,7 @@ interface Manifest {
     company: { key: string; units: number };
     sample: { ownerKey: string; cadastralCode: string; otherCadastralCode: string };
     sampleIdNumber: string;
+    withPhone: { idNumber: string; phone: string };
   };
 }
 
@@ -37,17 +38,23 @@ interface Summary {
   update: number;
   unchanged: number;
   error: number;
-  newOwners?: number;
-  ambiguous?: number;
 }
 
 interface Preview {
   ready: boolean;
-  summary: Summary;
-  owners?: {
+  fileIssues: { code: string; column?: string }[];
+  summary: {
+    units: Summary;
+    ownerships: Summary;
+    newOwners: number;
+    ownerUpdates: number;
+    ambiguous: number;
+  };
+  owners: {
     key: string;
     match: { status: string; candidates?: { type: string; key?: string }[] };
   }[];
+  rows: { line: number; issues: { code: string; column?: string }[] }[];
 }
 
 interface Unit {
@@ -58,6 +65,7 @@ interface Unit {
 
 interface Owner {
   id: string;
+  phone: string | null;
   units: { unitId: string }[];
   idNumbers?: string[];
 }
@@ -76,8 +84,6 @@ test.describe.configure({ mode: 'serial' });
 test.describe('Этап 4: помещения, собственники, импорт', () => {
   let admin: APIRequestContext;
   let manifest: Manifest;
-  const createdUnits: string[] = [];
-  const createdOwners: string[] = [];
 
   async function getJson<T>(request: APIRequestContext, url: string): Promise<T> {
     const response = await request.get(url);
@@ -99,29 +105,6 @@ test.describe('Этап 4: помещения, собственники, имп�
     const page = await getJson<{ items: Owner[]; total: number }>(admin, `/api/owners?q=${number}`);
     expect(page.total).toBe(1);
     return page.items[0]!;
-  }
-
-  async function createUnit(number: string, kind = 'PARKING'): Promise<Unit> {
-    const response = await post(admin, '/api/units', {
-      kind,
-      cadastralCode: uniqueCadastralCode(),
-      number,
-      floor: -3,
-      areaM2: '13.75',
-      tariffCategory: kind === 'APARTMENT' ? 'FULL' : null,
-    });
-    expect(response.status(), await response.text()).toBe(201);
-    const { unit } = (await response.json()) as { unit: Unit };
-    createdUnits.push(unit.id);
-    return unit;
-  }
-
-  async function createOwner(registryName: string, idNumbers: string[] = []): Promise<Owner> {
-    const response = await post(admin, '/api/owners', { kind: 'PERSON', registryName, idNumbers });
-    expect(response.status(), await response.text()).toBe(201);
-    const { owner } = (await response.json()) as { owner: Owner };
-    createdOwners.push(owner.id);
-    return owner;
   }
 
   /** Новая учётная запись RESIDENT, привязанная к собственнику, с сессией. */
@@ -154,13 +137,6 @@ test.describe('Этап 4: помещения, собственники, имп�
   });
 
   test.afterAll(async () => {
-    // Помещение удаляется вместе с правами собственности, затем — собственники без помещений.
-    for (const id of createdUnits) {
-      await del(admin, `/api/units/${id}`);
-    }
-    for (const id of createdOwners) {
-      await del(admin, `/api/owners/${id}`);
-    }
     await admin.dispose();
   });
 
@@ -168,25 +144,39 @@ test.describe('Этап 4: помещения, собственники, имп�
     await resetRateLimits(request);
   });
 
-  test('импорт units.csv: ровно 312 помещений по видам, повтор ничего не меняет', async () => {
-    const units = fixture('units.csv');
-    const first = (await (await importCsv(admin, 'units', 'preview', units)).json()) as Preview;
-    expect(first.ready).toBe(true);
-    expect(first.summary.error).toBe(0);
-    if (first.summary.create + first.summary.update > 0) {
-      const commit = await importCsv(admin, 'units', 'commit', units);
+  async function preview(csv: Buffer | string, resolutions?: Record<string, string>) {
+    const response = await importRegistry(admin, 'preview', csv, resolutions);
+    expect(response.status(), await response.text()).toBe(200);
+    return (await response.json()) as Preview;
+  }
+
+  test('импорт registry.csv: 312 помещений, спорные совпадения — на разбор, повтор ничего не меняет', async () => {
+    const registry = fixture('registry.csv');
+    const first = await preview(registry);
+    expect(first.fileIssues).toEqual([]);
+    expect(first.summary.units.error + first.summary.ownerships.error).toBe(0);
+    if (first.summary.ambiguous > 0) {
+      // Первый импорт: дубли и однофамилец не попадают в БД без решения администратора.
+      const ambiguous = first.owners.filter((owner) => owner.match.status === 'ambiguous');
+      expect(ambiguous.map((owner) => owner.key).sort()).toEqual(
+        Object.keys(manifest.owners.ambiguous).sort(),
+      );
+      expect((await importRegistry(admin, 'commit', registry)).status()).toBe(409);
+      const commit = await importRegistry(admin, 'commit', registry, manifest.owners.ambiguous);
       expect(commit.status(), await commit.text()).toBe(200);
     }
 
-    const again = (await (await importCsv(admin, 'units', 'preview', units)).json()) as Preview;
+    const again = await preview(registry);
+    expect(again.ready).toBe(true);
     expect(again.summary).toEqual({
-      create: 0,
-      update: 0,
-      unchanged: manifest.units.total,
-      error: 0,
+      units: { create: 0, update: 0, unchanged: manifest.units.total, error: 0 },
+      ownerships: { create: 0, update: 0, unchanged: manifest.owners.rows, error: 0 },
+      newOwners: 0,
+      ownerUpdates: 0,
+      ambiguous: 0,
     });
 
-    // Только помещения участка синтетической выписки: e2e создаёт свои вне его.
+    // Только помещения участка синтетической выписки.
     const all = await getJson<{ total: number }>(admin, '/api/units?q=05.30.39.005.');
     expect(all.total).toBe(manifest.units.total);
     expect(manifest.units.total).toBe(312);
@@ -197,70 +187,114 @@ test.describe('Этап 4: помещения, собственники, имп�
       );
       expect(page.total, kind).toBe(manifest.units.byKind[kind]);
     }
-  });
-
-  test('импорт owners.csv: спорные совпадения — на разбор, повтор ничего не меняет', async () => {
-    const owners = fixture('owners.csv');
-    const first = (await (await importCsv(admin, 'owners', 'preview', owners)).json()) as Preview;
-    expect(first.summary.error).toBe(0);
-    if (first.summary.ambiguous! > 0) {
-      // Первый импорт: дубли и однофамилец не попадают в БД без решения администратора.
-      const ambiguous = first.owners!.filter((owner) => owner.match.status === 'ambiguous');
-      expect(ambiguous.map((owner) => owner.key).sort()).toEqual(
-        Object.keys(manifest.owners.ambiguous).sort(),
-      );
-      expect((await importCsv(admin, 'owners', 'commit', owners)).status()).toBe(409);
-      const commit = await importCsv(admin, 'owners', 'commit', owners, manifest.owners.ambiguous);
-      expect(commit.status(), await commit.text()).toBe(200);
-    }
-
-    const again = (await (await importCsv(admin, 'owners', 'preview', owners)).json()) as Preview;
-    expect(again.ready).toBe(true);
-    expect(again.summary).toMatchObject({
-      create: 0,
-      update: 0,
-      unchanged: manifest.owners.rows,
-      error: 0,
-      newOwners: 0,
-      ambiguous: 0,
-    });
 
     // Юрлицо с 15 помещениями — по ID компании; номер шифруется, но ищется.
     const company = await ownerByIdNumber('405123456');
     expect(company.units).toHaveLength(manifest.owners.company.units);
+    // Телефон из файла сохранён у собственника и ищется.
+    const { withPhone } = manifest.owners;
+    expect((await ownerByIdNumber(withPhone.idNumber)).phone).toBe(withPhone.phone);
+    const byPhone = await getJson<{ items: Owner[] }>(
+      admin,
+      `/api/owners?q=${withPhone.phone.slice(-7)}`,
+    );
+    expect(byPhone.items.some((owner) => owner.phone === withPhone.phone)).toBe(true);
+  });
+
+  test('ошибки файла: нет столбцов, разные данные одного помещения, неверный телефон', async () => {
+    const missing = await preview('cadastral_code;owner_key;owner_kind;registry_name\n');
+    expect(missing.fileIssues).toEqual(
+      expect.arrayContaining([{ column: 'kind', code: 'MISSING_COLUMN' }]),
+    );
+
+    const code = uniqueCadastralCode();
+    const csv = [
+      'cadastral_code;kind;number;floor;floor_label;area_m2;owner_key;owner_kind;registry_name;phone',
+      `${code};PARKING;904;-3;;13.75;X1;PERSON;ტესტი ერთი;555 12 34 56`,
+      `${code};PARKING;904;-3;;16.25;X2;PERSON;ტესტი ორი;`,
+      `${code};PARKING;904;-3;;13.75;X3;PERSON;ტესტი სამი;12`,
+    ].join('\n');
+    const result = await preview(csv);
+    expect(result.ready).toBe(false);
+    const issues = Object.fromEntries(result.rows.map((row) => [row.line, row.issues]));
+    expect(issues[2]).toEqual([]);
+    expect(issues[3]).toContainEqual({ column: 'cadastral_code', code: 'UNIT_MISMATCH' });
+    expect(issues[4]).toContainEqual({ column: 'phone', code: 'INVALID_VALUE' });
+    expect((await importRegistry(admin, 'commit', csv)).status()).toBe(409);
+  });
+
+  test('вручную меняется только категория квартиры, импорт её не сбрасывает', async () => {
+    const unit = await unitByCode(manifest.owners.sample.cadastralCode);
+    const registry = fixture('registry.csv');
+    const before = await getJson<{ unit: { tariffCategory: string } }>(
+      admin,
+      `/api/units/${unit.id}`,
+    );
+
+    // Помещения и собственников создаёт и меняет только импорт (ТЗ v1.12).
+    expect((await post(admin, '/api/units', {})).status()).toBe(404);
+    expect((await put(admin, `/api/units/${unit.id}`, {})).status()).toBe(404);
+    expect((await del(admin, `/api/units/${unit.id}`)).status()).toBe(404);
+    expect((await post(admin, `/api/units/${unit.id}/ownerships`, {})).status()).toBe(404);
+    expect((await post(admin, '/api/owners', {})).status()).toBe(404);
+
+    const set = await put(admin, `/api/units/${unit.id}/category`, {
+      tariffCategory: 'PENSIONER',
+    });
+    expect(set.status(), await set.text()).toBe(200);
+    expect((await preview(registry)).summary.units.update).toBe(0);
+    await importRegistry(admin, 'commit', registry);
+    const after = await getJson<{ unit: { tariffCategory: string } }>(
+      admin,
+      `/api/units/${unit.id}`,
+    );
+    expect(after.unit.tariffCategory).toBe('PENSIONER');
+
+    const parking = await getJson<{ items: Unit[] }>(
+      admin,
+      '/api/units?kind=PARKING&q=05.30.39.005.',
+    );
+    const wrong = await put(admin, `/api/units/${parking.items[0]!.id}/category`, {
+      tariffCategory: 'FULL',
+    });
+    expect(wrong.status()).toBe(400);
+
+    const restore = await put(admin, `/api/units/${unit.id}/category`, {
+      tariffCategory: before.unit.tariffCategory,
+    });
+    expect(restore.status(), await restore.text()).toBe(200);
   });
 
   test('дубли и однофамильцы внутри файла попадают в отчёт, а не в БД', async () => {
     const tag = uniqueTag();
-    const [a, b, c] = [await createUnit('901'), await createUnit('902'), await createUnit('903')];
+    const [a, b, c] = [uniqueCadastralCode(), uniqueCadastralCode(), uniqueCadastralCode()];
     const name = `ტესტ${tag} გიორგაძე`;
+    const unit = (code: string, number: string) => `${code};PARKING;${number};-3;;13.75`;
     const csv = [
-      'cadastral_code;owner_key;owner_kind;registry_name;id_numbers;share;share_note;is_contact',
-      `${a.cadastralCode};A;PERSON;${name};AB${tag.slice(0, 6)};;;`,
+      'cadastral_code;kind;number;floor;floor_label;area_m2;owner_key;owner_kind;registry_name;id_numbers',
+      `${unit(a, '901')};A;PERSON;${name};AB${tag.slice(0, 6)}`,
       // То же лицо: слова в другом порядке, другой документ
-      `${b.cadastralCode};B;PERSON;გიორგაძე ტესტ${tag};;;;`,
+      `${unit(b, '902')};B;PERSON;გიორგაძე ტესტ${tag};`,
       // Однофамилец: то же имя, другой паспорт
-      `${c.cadastralCode};C;PERSON;${name};CD${tag.slice(0, 6)};;;`,
+      `${unit(c, '903')};C;PERSON;${name};CD${tag.slice(0, 6)}`,
     ].join('\n');
 
-    const preview = (await (await importCsv(admin, 'owners', 'preview', csv)).json()) as Preview;
-    expect(preview.ready).toBe(false);
-    const match = Object.fromEntries(preview.owners!.map((owner) => [owner.key, owner.match]));
+    const result = await preview(csv);
+    expect(result.ready).toBe(false);
+    const match = Object.fromEntries(result.owners.map((owner) => [owner.key, owner.match]));
     expect(match.A!.status).toBe('new');
     expect(match.B!.status).toBe('ambiguous');
     expect(match.B!.candidates).toContainEqual(expect.objectContaining({ type: 'key', key: 'A' }));
     expect(match.C!.status).toBe('ambiguous');
 
-    expect((await importCsv(admin, 'owners', 'commit', csv)).status()).toBe(409);
-    const before = await getJson<{ total: number }>(admin, `/api/owners?q=${tag}`);
-    expect(before.total).toBe(0);
+    // Без решений ничего не применяется: ни собственников, ни помещений.
+    expect((await importRegistry(admin, 'commit', csv)).status()).toBe(409);
+    expect((await getJson<{ total: number }>(admin, `/api/owners?q=${tag}`)).total).toBe(0);
+    expect((await getJson<{ total: number }>(admin, `/api/units?q=${a}`)).total).toBe(0);
 
-    const commit = await importCsv(admin, 'owners', 'commit', csv, { B: 'key:A', C: 'new' });
-    expect(commit.status(), await commit.text()).toBe(200);
-    const after = await getJson<{ items: Owner[]; total: number }>(admin, `/api/owners?q=${tag}`);
-    expect(after.total).toBe(2);
-    createdOwners.push(...after.items.map((owner) => owner.id));
-    expect(after.items.map((owner) => owner.units.length).sort()).toEqual([1, 2]);
+    const resolved = await preview(csv, { B: 'key:A', C: 'new' });
+    expect(resolved.ready).toBe(true);
+    expect(resolved.summary.newOwners).toBe(2);
   });
 
   test('IDOR: жилец видит только своё помещение, номеров документов в /api/me нет', async ({
@@ -372,36 +406,6 @@ test.describe('Этап 4: помещения, собственники, имп�
     expect(me.units).toHaveLength(manifest.owners.company.units);
     expect(me.units.every((unit) => unit.ownerIds.includes(company.id))).toBe(true);
     await representative.dispose();
-  });
-
-  test('слияние дублей переносит помещения и номера; собственника с помещениями не удалить', async () => {
-    const tag = uniqueTag();
-    const primary = await createOwner(`ოლღა ${tag}`, [`P${tag}`.slice(0, 12)]);
-    const duplicate = await createOwner(`${tag} ოლღა`, [`D${tag}`.slice(0, 12)]);
-    const [first, second] = [await createUnit('911'), await createUnit('912')];
-    for (const [unit, owner] of [
-      [first, primary],
-      [second, duplicate],
-    ] as const) {
-      const response = await post(admin, `/api/units/${unit.id}/ownerships`, {
-        ownerId: owner.id,
-        share: '1/2',
-        isContact: true,
-      });
-      expect(response.status(), await response.text()).toBe(201);
-    }
-
-    expect((await del(admin, `/api/owners/${primary.id}`)).status()).toBe(409);
-    const merge = await post(admin, `/api/owners/${primary.id}/merge`, {
-      duplicateId: duplicate.id,
-    });
-    expect(merge.status(), await merge.text()).toBe(201);
-    const merged = ((await merge.json()) as { owner: Owner }).owner;
-    expect(merged.units.map((unit) => unit.unitId).sort()).toEqual([first.id, second.id].sort());
-    expect(merged.idNumbers!.sort()).toEqual(
-      [`D${tag}`.slice(0, 12), `P${tag}`.slice(0, 12)].map((n) => n.toUpperCase()).sort(),
-    );
-    expect((await admin.get(`/api/owners/${duplicate.id}`)).status()).toBe(404);
   });
 
   test('натуральная сортировка: 5, 5ა, 5ბ, 5გ, 5დ, 6', async ({ page }) => {

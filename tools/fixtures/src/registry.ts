@@ -26,7 +26,6 @@ export interface UnitRow {
   floor: string;
   floor_label: string;
   area_m2: string;
-  tariff_category: string;
 }
 
 export interface OwnerRow {
@@ -38,7 +37,11 @@ export interface OwnerRow {
   share: string;
   share_note: string;
   is_contact: string;
+  phone: string;
 }
+
+/** Строка registry.csv: помещение и один его собственник. */
+export type RegistryRow = UnitRow & OwnerRow;
 
 /** Что e2e ожидает от импорта этих файлов. */
 export interface Manifest {
@@ -55,6 +58,8 @@ export interface Manifest {
     sample: { ownerKey: string; cadastralCode: string; otherCadastralCode: string };
     /** Номер документа собственника sample — его не должно быть в ответах /api/me/* */
     sampleIdNumber: string;
+    /** Собственник с телефоном в файле: номер документа для поиска и телефон */
+    withPhone: { idNumber: string; phone: string };
   };
 }
 
@@ -168,10 +173,6 @@ export function generateUnits(): UnitRow[] {
   const next = random(4);
   const units: UnitRow[] = [];
   const area = (min: number, max: number) => (min + next() * (max - min)).toFixed(2);
-  const category = () => {
-    const value = next();
-    return value < 0.8 ? 'FULL' : value < 0.95 ? 'BLACK_FRAME' : 'PENSIONER';
-  };
   const apartment = (number: string, codeNumber: string, floor: number, areaM2: string) =>
     units.push({
       cadastral_code: code('01', codeNumber),
@@ -180,7 +181,6 @@ export function generateUnits(): UnitRow[] {
       floor: String(floor),
       floor_label: '',
       area_m2: areaM2,
-      tariff_category: category(),
     });
 
   // Квартиры 001–257 без 133, 228, 229: 132 — объединённая 132+133 под старым кодом.
@@ -213,7 +213,6 @@ export function generateUnits(): UnitRow[] {
     floor: '',
     floor_label: 'ტექნიკური სართული (ნიშნული 65.10)',
     area_m2: '338.99',
-    tariff_category: '',
   });
   for (let n = 1; n <= 47; n++) {
     units.push({
@@ -223,7 +222,6 @@ export function generateUnits(): UnitRow[] {
       floor: '-3',
       floor_label: '',
       area_m2: n % 4 === 0 ? '16.25' : '13.75',
-      tariff_category: '',
     });
   }
   for (let n = 1; n <= 5; n++) {
@@ -234,7 +232,6 @@ export function generateUnits(): UnitRow[] {
       floor: '1',
       floor_label: '',
       area_m2: area(174.72, 286.72),
-      tariff_category: '',
     });
   }
   return units;
@@ -244,6 +241,8 @@ interface Person {
   key: string;
   name: string;
   ids: string[];
+  /** Контактный телефон: у части собственников он известен заранее */
+  phone?: string;
 }
 
 export function generateOwners(units: UnitRow[]): {
@@ -276,7 +275,9 @@ export function generateOwners(units: UnitRow[]): {
           : variant < 0.95
             ? [personalNumber(), passport()]
             : [];
-    return { key: `p${String(personCount).padStart(3, '0')}`, name, ids };
+    const phone =
+      next() < 0.6 ? `+9955${String(Math.floor(10_000_000 + next() * 89_999_999))}` : '';
+    return { key: `p${String(personCount).padStart(3, '0')}`, name, ids, phone };
   };
   const add = (
     unit: UnitRow,
@@ -293,6 +294,7 @@ export function generateOwners(units: UnitRow[]): {
       share: '',
       share_note: '',
       is_contact: '',
+      phone: owner.phone ?? '',
       ...extra,
     });
 
@@ -390,6 +392,7 @@ export function generateOwners(units: UnitRow[]): {
       person.ids.length > 0 && rows.filter((r) => r.owner_key === person.key).length === 1,
   )!;
   const sampleRow = rows.find((row) => row.owner_key === sampleOwner.key)!;
+  const withPhone = people.find((person) => person.ids.length > 0 && person.phone)!;
   const otherRow = rows.find(
     (row) => row.owner_key !== sampleOwner.key && row.cadastral_code !== sampleRow.cadastral_code,
   )!;
@@ -408,6 +411,7 @@ export function generateOwners(units: UnitRow[]): {
         otherCadastralCode: otherRow.cadastral_code,
       },
       sampleIdNumber: sampleOwner.ids[0]!,
+      withPhone: { idNumber: withPhone.ids[0]!, phone: withPhone.phone! },
     },
   };
 }

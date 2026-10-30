@@ -1,20 +1,21 @@
 'use client';
 
 import {
+  formatPhone,
   IMPORT_MAX_SIZE,
+  nameWithLatin,
   type ImportAction,
   type ImportChange,
   type ImportIssue,
   type ImportPreview,
   type ImportResult,
-  type ImportStep,
+  type ImportSummary,
   type OwnerImportGroup,
   type OwnerResolutions,
-  type OwnersPreview,
 } from '@tsz/shared';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { ChangeEvent, useState } from 'react';
-import { ShareText, UnitName } from '@/components/registry';
+import { RegistryName, ShareText, UnitName } from '@/components/registry';
 import { Alert, Badge, buttonClass, FormStatusAlert } from '@/components/ui';
 import { apiRequest } from '@/lib/client-api';
 import { useApiForm } from '@/lib/use-api-form';
@@ -66,14 +67,16 @@ function Resolution({
   onChange: (value: string) => void;
 }) {
   const t = useTranslations('adminImport');
+  const locale = useLocale();
   if (group.match.status !== 'ambiguous') {
     return null;
   }
   const name = `resolution-${group.key}`;
   return (
     <fieldset className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
-      <legend className="px-1 font-bold">
-        <span lang="ka">{group.registryName}</span>{' '}
+      {/* float выносит legend с рамки внутрь карточки */}
+      <legend className="float-left w-full font-bold">
+        <RegistryName name={group.registryName} />{' '}
         <span className="font-normal text-gray-700">
           ({t('keyLines', { key: group.key, lines: group.lines.join(', ') })})
         </span>
@@ -94,8 +97,13 @@ function Resolution({
             <span className="flex flex-col">
               <span>
                 {candidate.type === 'owner'
-                  ? t('sameAsOwner', { name: candidate.displayName ?? candidate.registryName })
-                  : t('sameAsKey', { key: candidate.key, name: candidate.registryName })}
+                  ? t('sameAsOwner', {
+                      name: nameWithLatin(candidate.displayName ?? candidate.registryName, locale),
+                    })
+                  : t('sameAsKey', {
+                      key: candidate.key,
+                      name: nameWithLatin(candidate.registryName, locale),
+                    })}
               </span>
               <span className="text-sm text-gray-600">
                 {t(`reasons.${candidate.reason}`)}
@@ -122,7 +130,45 @@ function Resolution({
   );
 }
 
-function StepPanel({ step }: { step: ImportStep }) {
+/** Строка таблицы предпросмотра: помещение, собственник (изменения) или право собственности. */
+type PreviewRow =
+  | ({ type: 'unit' } & ImportPreview['units'][number])
+  | ({ type: 'owner'; line: number; action: ImportAction } & OwnerImportGroup)
+  | ({ type: 'ownership' } & ImportPreview['rows'][number]);
+
+function previewRows(preview: ImportPreview): PreviewRow[] {
+  const rows: PreviewRow[] = [
+    ...preview.units.map((row) => ({ type: 'unit' as const, ...row })),
+    ...preview.owners
+      .filter((group) => group.changes.length > 0)
+      .map((group) => ({
+        type: 'owner' as const,
+        ...group,
+        line: group.lines[0] ?? 0,
+        action: 'update' as const,
+      })),
+    ...preview.rows.map((row) => ({ type: 'ownership' as const, ...row })),
+  ];
+  const order = { unit: 0, owner: 1, ownership: 2 };
+  return rows.sort((a, b) => a.line - b.line || order[a.type] - order[b.type]);
+}
+
+function SummaryBadges({ title, summary }: { title: string; summary: ImportSummary }) {
+  const t = useTranslations('adminImport');
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="font-semibold">{title}:</span>
+      {(['create', 'update', 'unchanged', 'error'] as const).map((action) => (
+        <Badge key={action} tone={ACTION_TONE[action]}>
+          {t(`summary.${action}`, { count: summary[action] })}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+/** Импорт registry.csv (ТЗ п. 8.10): проверка → решения по спорным совпадениям → импорт. */
+export function ImportWizard() {
   const t = useTranslations('adminImport');
   const te = useTranslations('errors');
   const form = useApiForm();
@@ -135,9 +181,7 @@ function StepPanel({ step }: { step: ImportStep }) {
   function body(): FormData {
     const data = new FormData();
     data.set('file', file!);
-    if (step === 'owners') {
-      data.set('resolutions', JSON.stringify(resolutions));
-    }
+    data.set('resolutions', JSON.stringify(resolutions));
     return data;
   }
 
@@ -157,7 +201,7 @@ function StepPanel({ step }: { step: ImportStep }) {
   async function check() {
     setDone(null);
     const result = await form.submit(() =>
-      apiRequest<ImportPreview>('POST', `/api/import/${step}/preview`, body()),
+      apiRequest<ImportPreview>('POST', '/api/import/preview', body()),
     );
     if (result) {
       setPreview(result.data);
@@ -166,7 +210,7 @@ function StepPanel({ step }: { step: ImportStep }) {
 
   async function commit() {
     const result = await form.submit(() =>
-      apiRequest<ImportResult>('POST', `/api/import/${step}/commit`, body()),
+      apiRequest<ImportResult>('POST', '/api/import/commit', body()),
     );
     if (result) {
       setDone(result.data);
@@ -177,26 +221,23 @@ function StepPanel({ step }: { step: ImportStep }) {
     }
   }
 
-  const ownersPreview = preview?.step === 'owners' ? (preview as OwnersPreview) : null;
-  const ambiguous =
-    ownersPreview?.owners.filter((group) => group.match.status === 'ambiguous') ?? [];
+  const ambiguous = preview?.owners.filter((group) => group.match.status === 'ambiguous') ?? [];
   const unresolved = ambiguous.filter((group) => !resolutions[group.key]).length;
-  const rows = (preview?.rows ?? []) as (ImportPreview['rows'][number] & {
-    action: ImportAction;
-  })[];
+  const rows = preview ? previewRows(preview) : [];
   const visibleRows = showAll
     ? rows
     : rows.filter((row) => row.action !== 'unchanged' && row.action !== 'create');
+  const errors = preview ? preview.summary.units.error + preview.summary.ownerships.error : 0;
 
   return (
     <div className="flex flex-col gap-5">
-      <p className="text-gray-600">{t(`${step}.hint`)}</p>
+      <p className="text-gray-600">{t('hint')}</p>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={`${step}-file`} className="font-semibold">
-          {t('file', { name: `${step}.csv` })}
+        <label htmlFor="registry-file" className="font-semibold">
+          {t('file')}
         </label>
         <input
-          id={`${step}-file`}
+          id="registry-file"
           type="file"
           accept=".csv,text/csv"
           onChange={choose}
@@ -207,9 +248,9 @@ function StepPanel({ step }: { step: ImportStep }) {
       {done && (
         <Alert kind="success">
           {t('done', {
-            create: done.summary.create,
-            update: done.summary.update,
-            unchanged: done.summary.unchanged,
+            units: done.summary.units.create + done.summary.units.update,
+            owners: done.summary.newOwners + done.summary.ownerUpdates,
+            ownerships: done.summary.ownerships.create + done.summary.ownerships.update,
           })}
         </Alert>
       )}
@@ -235,8 +276,8 @@ function StepPanel({ step }: { step: ImportStep }) {
       </div>
 
       {preview && (
-        <section aria-labelledby={`${step}-preview`} className="flex flex-col gap-4">
-          <h3 id={`${step}-preview`} className="text-lg font-bold">
+        <section aria-labelledby="registry-preview" className="flex flex-col gap-4">
+          <h3 id="registry-preview" className="text-lg font-bold">
             {t('previewTitle')}
           </h3>
           {preview.fileIssues.length > 0 && (
@@ -244,27 +285,24 @@ function StepPanel({ step }: { step: ImportStep }) {
               <IssueList issues={preview.fileIssues} />
             </Alert>
           )}
-          <div className="flex flex-wrap gap-2" data-testid={`${step}-summary`}>
-            {(['create', 'update', 'unchanged', 'error'] as const).map((action) => (
-              <Badge key={action} tone={ACTION_TONE[action]}>
-                {t(`summary.${action}`, { count: preview.summary[action] })}
+          <div className="flex flex-col gap-2" data-testid="import-summary">
+            <SummaryBadges title={t('unitsTitle')} summary={preview.summary.units} />
+            <SummaryBadges title={t('ownershipsTitle')} summary={preview.summary.ownerships} />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{t('ownersTitle')}:</span>
+              <Badge tone="accent">
+                {t('summary.newOwners', { count: preview.summary.newOwners })}
               </Badge>
-            ))}
-            {ownersPreview && (
-              <>
-                <Badge tone="accent">
-                  {t('summary.newOwners', { count: ownersPreview.summary.newOwners })}
-                </Badge>
-                <Badge tone="amber">
-                  {t('summary.ambiguous', { count: ownersPreview.summary.ambiguous })}
-                </Badge>
-              </>
-            )}
+              <Badge tone="amber">
+                {t('summary.ownerUpdates', { count: preview.summary.ownerUpdates })}
+              </Badge>
+              <Badge tone="amber">
+                {t('summary.ambiguous', { count: preview.summary.ambiguous })}
+              </Badge>
+            </div>
           </div>
           {!preview.ready && preview.fileIssues.length === 0 && (
-            <Alert kind="error">
-              {preview.summary.error > 0 ? t('notReadyErrors') : t('notReadyAmbiguous')}
-            </Alert>
+            <Alert kind="error">{errors > 0 ? t('notReadyErrors') : t('notReadyAmbiguous')}</Alert>
           )}
 
           {ambiguous.length > 0 && (
@@ -314,32 +352,19 @@ function StepPanel({ step }: { step: ImportStep }) {
                 </thead>
                 <tbody>
                   {visibleRows.map((row) => (
-                    <tr key={row.line} className="border-b border-gray-100 align-top last:border-0">
+                    <tr
+                      key={`${row.type}-${row.type === 'owner' ? row.key : row.line}`}
+                      className="border-b border-gray-100 align-top last:border-0"
+                    >
                       <td className="px-3 py-2 tabular-nums">{row.line}</td>
                       <td className="px-3 py-2">
-                        {'key' in row ? (
-                          <span className="flex flex-col">
-                            <span>
-                              <code>{row.key}</code> → {row.unitNumber ?? row.cadastralCode}
-                            </span>
-                            <ShareText share={row.share} note={row.shareNote} />
-                          </span>
-                        ) : (
-                          <span className="flex flex-col">
-                            {row.kind ? (
-                              <UnitName kind={row.kind} number={row.number} />
-                            ) : (
-                              row.number
-                            )}
-                            <span className="text-gray-600">{row.cadastralCode}</span>
-                          </span>
-                        )}
+                        <PreviewRowLabel row={row} />
                       </td>
                       <td className="px-3 py-2">
                         <Badge tone={ACTION_TONE[row.action]}>{t(`actions.${row.action}`)}</Badge>
                       </td>
                       <td className="px-3 py-2">
-                        <IssueList issues={row.issues} />
+                        {'issues' in row && <IssueList issues={row.issues} />}
                         <ChangeList changes={row.changes} />
                       </td>
                     </tr>
@@ -354,30 +379,35 @@ function StepPanel({ step }: { step: ImportStep }) {
   );
 }
 
-/** Импорт из выписки (ТЗ п. 8.10): сначала помещения, затем собственники. */
-export function ImportWizard() {
+function PreviewRowLabel({ row }: { row: PreviewRow }) {
   const t = useTranslations('adminImport');
-  const [step, setStep] = useState<ImportStep>('units');
+  if (row.type === 'unit') {
+    return (
+      <span className="flex flex-col">
+        {row.kind ? <UnitName kind={row.kind} number={row.number} /> : row.number}
+        <span className="text-gray-600">{row.cadastralCode}</span>
+      </span>
+    );
+  }
+  if (row.type === 'owner') {
+    return (
+      <span className="flex flex-col">
+        <span>
+          <RegistryName name={row.registryName} />
+        </span>
+        <span className="text-gray-600">
+          {t('ownerKey', { key: row.key })}
+          {row.phone && <> · {formatPhone(row.phone)}</>}
+        </span>
+      </span>
+    );
+  }
   return (
-    <div className="flex flex-col gap-5">
-      <div role="tablist" aria-label={t('steps')} className="flex flex-wrap gap-2">
-        {(['units', 'owners'] as const).map((value, index) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={step === value}
-            onClick={() => setStep(value)}
-            className={step === value ? buttonClass.primary : buttonClass.secondary}
-          >
-            {t('stepTitle', { number: index + 1, name: t(`${value}.title`) })}
-          </button>
-        ))}
-      </div>
-      {/* key: при переключении шага состояние предыдущего сбрасывается */}
-      <div role="tabpanel">
-        <StepPanel key={step} step={step} />
-      </div>
-    </div>
+    <span className="flex flex-col">
+      <span>
+        <code>{row.key}</code> → {row.unitNumber ?? row.cadastralCode}
+      </span>
+      <ShareText share={row.share} note={row.shareNote} />
+    </span>
   );
 }

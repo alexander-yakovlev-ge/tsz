@@ -7,7 +7,6 @@ import {
   OWNER_KINDS,
   OWNER_PAGE_SIZE,
   OwnerDetail,
-  OwnerFields,
   OwnerItem,
   Page,
   searchUnitNumber,
@@ -77,7 +76,7 @@ export class OwnersService {
     };
   }
 
-  /** Имя (оба написания), номер документа, номер помещения, телефон (ТЗ п. 8.12). */
+  /** Имя (оба написания), номер документа, номер помещения, телефон учётной записи или из выписки. */
   private searchConditions(q: string): Prisma.OwnerWhereInput[] {
     const conditions: Prisma.OwnerWhereInput[] = [
       { registryName: { contains: q, mode: 'insensitive' } },
@@ -88,6 +87,7 @@ export class OwnersService {
     const digits = q.replace(/\D/g, '');
     if (digits.length >= 4) {
       conditions.push({ user: { phone: { contains: digits }, ...activeUser } });
+      conditions.push({ phone: { contains: digits } });
     }
     return conditions;
   }
@@ -96,60 +96,30 @@ export class OwnersService {
     return this.toDetail(await this.findWithUnits(id));
   }
 
-  async create(actor: SessionUser, input: OwnerFields, ip?: string): Promise<OwnerDetail> {
-    const { idNumbers, ...fields } = input;
-    const owner = await this.prisma.owner.create({
-      data: { ...fields, ...this.ownerIds.seal(idNumbers) },
+  /** Служебная заметка; текст в AuditLog не пишется (ТЗ п. 4.3). */
+  async updateNote(
+    actor: SessionUser,
+    id: string,
+    note: string | null,
+    ip?: string,
+  ): Promise<OwnerDetail> {
+    const current = await this.find(id);
+    if (current.note === note) {
+      return this.get(id);
+    }
+    const owner = await this.prisma.owner.update({
+      where: { id },
+      data: { note },
       include: ownerInclude,
     });
     await this.audit.log({
       userId: actor.id,
-      action: 'owner.create',
+      action: 'owner.note',
       entity: 'owner',
-      entityId: owner.id,
-      payload: { kind: owner.kind, registryName: owner.registryName, idNumbers: idNumbers.length },
+      entityId: id,
+      payload: { note: note !== null },
       ip,
     });
-    return this.toDetail(owner);
-  }
-
-  /** Номера документов в AuditLog не пишутся — только их число (ТЗ п. 4.3). */
-  async update(
-    actor: SessionUser,
-    id: string,
-    input: OwnerFields,
-    ip?: string,
-  ): Promise<OwnerDetail> {
-    const current = await this.find(id);
-    const currentIds = this.ownerIds.open(current.idNumbers);
-    const changes: Record<string, unknown> = {};
-    for (const field of ['kind', 'registryName', 'displayName', 'note'] as const) {
-      if (current[field] !== input[field]) {
-        changes[field] = field === 'note' ? true : { from: current[field], to: input[field] };
-      }
-    }
-    const idsChanged =
-      currentIds.length !== input.idNumbers.length ||
-      currentIds.some((value, index) => value !== input.idNumbers[index]);
-    if (idsChanged) {
-      changes.idNumbers = { from: currentIds.length, to: input.idNumbers.length };
-    }
-    const { idNumbers, ...fields } = input;
-    const owner = await this.prisma.owner.update({
-      where: { id },
-      data: { ...fields, ...(idsChanged ? this.ownerIds.seal(idNumbers) : {}) },
-      include: ownerInclude,
-    });
-    if (Object.keys(changes).length > 0) {
-      await this.audit.log({
-        userId: actor.id,
-        action: 'owner.update',
-        entity: 'owner',
-        entityId: id,
-        payload: changes as Prisma.InputJsonValue,
-        ip,
-      });
-    }
     return this.toDetail(owner);
   }
 
@@ -235,101 +205,6 @@ export class OwnersService {
       });
     }
     return this.toDetail(owner);
-  }
-
-  /**
-   * Слияние дублей (ТЗ п. 8.12): права на помещения, номера документов и учётная запись
-   * переходят на основную запись, дубль удаляется. Если оба владеют одним помещением,
-   * остаётся право основной записи, отметка контактного лица сохраняется.
-   */
-  async merge(
-    actor: SessionUser,
-    id: string,
-    duplicateId: string,
-    ip?: string,
-  ): Promise<OwnerDetail> {
-    if (id === duplicateId) {
-      throw new ApiError(HttpStatus.BAD_REQUEST, 'OWNER_MERGE_SELF');
-    }
-    const primary = await this.find(id);
-    const duplicate = await this.prisma.owner.findUnique({
-      where: { id: duplicateId },
-      include: { ownerships: true },
-    });
-    if (!duplicate) {
-      throw new ApiError(HttpStatus.BAD_REQUEST, 'VALIDATION', { duplicateId: 'INVALID_VALUE' });
-    }
-    const idNumbers = [
-      ...new Set([
-        ...this.ownerIds.open(primary.idNumbers),
-        ...this.ownerIds.open(duplicate.idNumbers),
-      ]),
-    ];
-    let movedUnits = 0;
-    await this.prisma.$transaction(async (tx) => {
-      for (const ownership of duplicate.ownerships) {
-        const existing = await tx.unitOwnership.findUnique({
-          where: { unitId_ownerId: { unitId: ownership.unitId, ownerId: id } },
-        });
-        if (existing) {
-          await tx.unitOwnership.delete({ where: { id: ownership.id } });
-          if (ownership.isContact && !existing.isContact) {
-            await tx.unitOwnership.update({
-              where: { id: existing.id },
-              data: { isContact: true },
-            });
-          }
-        } else {
-          await tx.unitOwnership.update({ where: { id: ownership.id }, data: { ownerId: id } });
-          movedUnits++;
-        }
-      }
-      await tx.owner.update({
-        where: { id },
-        data: {
-          ...this.ownerIds.seal(idNumbers),
-          userId: primary.userId ?? duplicate.userId,
-          displayName: primary.displayName ?? duplicate.displayName,
-          note: [primary.note, duplicate.note].filter(Boolean).join('\n\n') || null,
-        },
-      });
-      await tx.owner.delete({ where: { id: duplicateId } });
-    });
-    await this.audit.log({
-      userId: actor.id,
-      action: 'owner.merge',
-      entity: 'owner',
-      entityId: id,
-      payload: {
-        duplicateId,
-        duplicateRegistryName: duplicate.registryName,
-        movedUnits,
-        userId: primary.userId ? null : duplicate.userId,
-      },
-      ip,
-    });
-    return this.get(id);
-  }
-
-  /** Только без помещений (ТЗ п. 8.12). */
-  async remove(actor: SessionUser, id: string, ip?: string): Promise<void> {
-    const owner = await this.find(id);
-    if ((await this.prisma.unitOwnership.count({ where: { ownerId: id } })) > 0) {
-      throw new ApiError(HttpStatus.CONFLICT, 'OWNER_HAS_UNITS');
-    }
-    await this.prisma.owner.delete({ where: { id } }).catch((error: unknown) => {
-      throw error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003'
-        ? new ApiError(HttpStatus.CONFLICT, 'OWNER_HAS_UNITS')
-        : error;
-    });
-    await this.audit.log({
-      userId: actor.id,
-      action: 'owner.delete',
-      entity: 'owner',
-      entityId: id,
-      payload: { registryName: owner.registryName },
-      ip,
-    });
   }
 
   private toDetail(owner: OwnerWithUnits): OwnerDetail {

@@ -1,8 +1,9 @@
 import type { OwnerKind, Share, TariffCategory, UnitKind } from './registry';
 
-/** Импорт из выписки (ТЗ п. 8.10). Контакты и синхронизация — этап 7. */
-export const IMPORT_STEPS = ['units', 'owners'] as const;
-export type ImportStep = (typeof IMPORT_STEPS)[number];
+/**
+ * Импорт из выписки (ТЗ п. 8.10): один файл registry.csv, строка — помещение и один его
+ * собственник. Учётные записи по телефонам и синхронизация — этап 7.
+ */
 
 /** Максимальный размер CSV: в выписке 312 помещений, это десятки килобайт. */
 export const IMPORT_MAX_SIZE = 2 * 1024 * 1024;
@@ -15,7 +16,10 @@ export const IMPORT_ISSUE_CODES = [
   'INVALID_VALUE',
   'TOO_LONG',
   'DUPLICATE_ROW',
-  'UNKNOWN_UNIT',
+  /** Данные помещения отличаются от его первой строки в файле */
+  'UNIT_MISMATCH',
+  /** Ошибка в данных помещения этой строки — право собственности не проверяется */
+  'UNIT_ERROR',
   'OWNER_MISMATCH',
   'ID_NUMBER_SHARED',
   'TOO_MANY_CONTACTS',
@@ -50,19 +54,11 @@ export interface UnitImportRow {
   cadastralCode: string;
   kind: UnitKind | null;
   number: string;
+  /** Категория тарифа: из файла не берётся — новая квартира получает FULL, дальше вручную */
   tariffCategory: TariffCategory | null;
   action: ImportAction;
   changes: ImportChange[];
   issues: ImportIssue[];
-}
-
-export interface UnitsPreview {
-  step: 'units';
-  fileIssues: ImportIssue[];
-  rows: UnitImportRow[];
-  summary: ImportSummary;
-  /** Импорт можно выполнить: нет ошибок */
-  ready: boolean;
 }
 
 /** Почему кандидат предложен: совпал номер документа, имя точно или похоже, или это другая метка файла. */
@@ -98,10 +94,14 @@ export interface OwnerImportGroup {
   kind: OwnerKind | null;
   registryName: string;
   idNumberCount: number;
+  /** Контактный телефон из файла (E.164); пустой не стирает сохранённый */
+  phone: string | null;
   lines: number[];
   match: OwnerMatch;
   /** Новые номера документов, которые добавятся найденному собственнику */
   addedIdNumbers: number;
+  /** Изменения у найденного собственника: телефон */
+  changes: ImportChange[];
 }
 
 export interface OwnershipImportRow {
@@ -117,16 +117,24 @@ export interface OwnershipImportRow {
   issues: ImportIssue[];
 }
 
-export interface OwnersPreview {
-  step: 'owners';
-  fileIssues: ImportIssue[];
-  owners: OwnerImportGroup[];
-  rows: OwnershipImportRow[];
-  summary: ImportSummary & { newOwners: number; ambiguous: number };
-  ready: boolean;
+export interface ImportPreviewSummary {
+  units: ImportSummary;
+  ownerships: ImportSummary;
+  newOwners: number;
+  /** Найденные собственники, у которых что-то изменится (телефон, номера документов) */
+  ownerUpdates: number;
+  ambiguous: number;
 }
 
-export type ImportPreview = UnitsPreview | OwnersPreview;
+export interface ImportPreview {
+  fileIssues: ImportIssue[];
+  units: UnitImportRow[];
+  owners: OwnerImportGroup[];
+  rows: OwnershipImportRow[];
+  summary: ImportPreviewSummary;
+  /** Импорт можно выполнить: нет ошибок и все неоднозначные совпадения решены */
+  ready: boolean;
+}
 
 /**
  * Решения администратора по неоднозначным совпадениям: метка файла →
@@ -135,6 +143,5 @@ export type ImportPreview = UnitsPreview | OwnersPreview;
 export type OwnerResolutions = Record<string, string>;
 
 export interface ImportResult {
-  step: ImportStep;
-  summary: ImportSummary;
+  summary: ImportPreviewSummary;
 }

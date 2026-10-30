@@ -112,6 +112,26 @@ export function displayUnitNumber(number: string, locale: Locale): string {
 }
 
 /**
+ * Латинская транслитерация грузинского текста для администратора, не читающего по-грузински:
+ * «სალომე ბოლქვაძე» → «Salome Bolkvadze». Без грузинских букв — null.
+ */
+export function latinName(text: string): string | null {
+  if (!/[\u10D0-\u10FF]/.test(text)) {
+    return null;
+  }
+  return text.replace(/[\u10D0-\u10FF]+/g, (word) => {
+    const latin = [...word].map((char) => GEORGIAN_TO_EN[char] ?? char).join('');
+    return latin.charAt(0).toUpperCase() + latin.slice(1);
+  });
+}
+
+/** Имя с транслитерацией в скобках для подписей и подтверждений; на ka — как есть. */
+export function nameWithLatin(name: string, locale: Locale): string {
+  const latin = locale === 'ka' ? null : latinName(name);
+  return latin ? `${name} (${latin})` : name;
+}
+
+/**
  * Номер для поиска: администратор на ru/en набирает «5а» или «5a» — ищем 5ა.
  * Однозначно обратимы только буквы, которые встречаются в номерах (ა–დ).
  */
@@ -148,7 +168,7 @@ const optionalText = (max: number) =>
     .nullish()
     .transform((value) => value || null);
 
-/** Помещение: форма администратора и строка units.csv (ТЗ п. 8.1, 8.10). */
+/** Помещение — данные помещения из строки registry.csv (ТЗ п. 8.10). Вручную меняется только категория. */
 export const unitSchema = z
   .object({
     kind: z.enum(UNIT_KINDS, code('INVALID_VALUE')),
@@ -185,8 +205,16 @@ export const unitSchema = z
       ctx.addIssue({ code: 'custom', path: ['tariffCategory'], message: code('INVALID_VALUE') });
     }
   });
-export type UnitInput = z.input<typeof unitSchema>;
 export type UnitFields = z.output<typeof unitSchema>;
+
+/** Категория тарифа — единственное поле помещения, которое администратор меняет вручную (ТЗ п. 8.1). */
+export const unitCategorySchema = z.object({
+  tariffCategory: z
+    .enum(TARIFF_CATEGORIES, code('INVALID_VALUE'))
+    .nullish()
+    .transform((value) => value ?? null),
+});
+export type UnitCategoryInput = z.input<typeof unitCategorySchema>;
 
 // --- Собственники (ТЗ п. 4.3, 4.3.1) ---
 
@@ -266,52 +294,13 @@ export function formatShare(share: Share | null): string {
   return share ? `${share.num}/${share.den}` : '';
 }
 
-const shareField = z
-  .string(code('INVALID_VALUE'))
-  .max(20, code('INVALID_VALUE'))
-  .nullish()
-  .transform((value, ctx) => {
-    const share = parseShare(value ?? '');
-    if (share === null) {
-      ctx.addIssue({ code: 'custom', message: code('INVALID_VALUE') });
-      return z.NEVER;
-    }
-    return share ?? null;
-  });
-
-export const ownerSchema = z.object({
-  kind: z.enum(OWNER_KINDS, code('INVALID_VALUE')),
-  registryName: z
-    .string(code('REQUIRED'))
-    .trim()
-    .min(1, code('REQUIRED'))
-    .max(300, code('TOO_LONG')),
-  displayName: optionalText(200),
-  idNumbers: idNumbersField,
-  note: optionalText(2000),
-});
-export type OwnerInput = z.input<typeof ownerSchema>;
-export type OwnerFields = z.output<typeof ownerSchema>;
-
-/** Право собственности: доля, пояснение и контактное лицо (ТЗ п. 4.3.1). */
-export const ownershipSchema = z.object({
-  share: shareField,
-  shareNote: optionalText(300),
-  isContact: z.boolean(code('INVALID_VALUE')).default(false),
-});
-export type OwnershipInput = z.input<typeof ownershipSchema>;
-
-export const addOwnershipSchema = ownershipSchema.extend({
-  ownerId: z.uuid(code('REQUIRED')),
-});
-export type AddOwnershipInput = z.input<typeof addOwnershipSchema>;
+/** Служебная заметка администратора о собственнике (ТЗ п. 4.3). */
+export const ownerNoteSchema = z.object({ note: optionalText(2000) });
+export type OwnerNoteInput = z.input<typeof ownerNoteSchema>;
 
 /** Отображаемое имя: пустое — показывается имя из реестра (ТЗ п. 4.3, 7.1). */
 export const displayNameSchema = z.object({ displayName: optionalText(200) });
 export type DisplayNameInput = z.input<typeof displayNameSchema>;
-
-export const mergeOwnerSchema = z.object({ duplicateId: z.uuid(code('REQUIRED')) });
-export type MergeOwnerInput = z.input<typeof mergeOwnerSchema>;
 
 // --- Ответы API ---
 
@@ -327,6 +316,8 @@ export interface UnitOwnerItem {
   ownerKind: OwnerKind;
   registryName: string;
   displayName: string | null;
+  /** Контактный телефон из выписки — только для администратора */
+  phone: string | null;
   share: Share | null;
   shareNote: string | null;
   isContact: boolean;
@@ -374,6 +365,8 @@ export interface OwnerItem {
   kind: OwnerKind;
   registryName: string;
   displayName: string | null;
+  /** Контактный телефон из registry.csv; учётные записи по нему — этап 7 */
+  phone: string | null;
   units: OwnerUnitItem[];
   user: LinkedUser | null;
 }

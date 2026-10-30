@@ -3,7 +3,6 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
-  Param,
   Post,
   Req,
   UploadedFile,
@@ -13,10 +12,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   IMPORT_MAX_SIZE,
-  IMPORT_STEPS,
   ImportPreview,
   ImportResult,
-  ImportStep,
   OwnerResolutions,
   SessionUser,
 } from '@tsz/shared';
@@ -57,13 +54,6 @@ const bodySchema = z.object({
 });
 type Body = z.output<typeof bodySchema>;
 
-function stepOf(value: string): ImportStep {
-  if (!(IMPORT_STEPS as readonly string[]).includes(value)) {
-    throw new ApiError(HttpStatus.NOT_FOUND, 'NOT_FOUND');
-  }
-  return value as ImportStep;
-}
-
 function bufferOf(file: IncomingFile | undefined): Buffer {
   if (!file || file.size === 0) {
     throw new ApiError(HttpStatus.BAD_REQUEST, 'FILE_REQUIRED');
@@ -75,39 +65,33 @@ const upload = FileInterceptor('file', {
   limits: { fileSize: IMPORT_MAX_SIZE, files: 1, fields: 5, fieldSize: 256 * 1024 },
 });
 
-/** Импорт units.csv и owners.csv: предпросмотр → подтверждение (ТЗ п. 8.10, 9). */
+/** Импорт registry.csv: предпросмотр → подтверждение (ТЗ п. 8.10, 9). */
 @Controller('import')
 @Roles('ADMIN')
 export class ImportController {
   constructor(private readonly imports: ImportService) {}
 
-  @Post(':step/preview')
+  @Post('preview')
   @HttpCode(HttpStatus.OK)
   @UseFilters(FileTooLargeFilter)
   @UseInterceptors(upload)
   preview(
-    @Param('step') step: string,
     @Body(new ZodPipe(bodySchema)) body: Body,
     @UploadedFile() file: IncomingFile | undefined,
   ): Promise<ImportPreview> {
-    return stepOf(step) === 'units'
-      ? this.imports.previewUnits(bufferOf(file))
-      : this.imports.previewOwners(bufferOf(file), body.resolutions);
+    return this.imports.preview(bufferOf(file), body.resolutions);
   }
 
-  @Post(':step/commit')
+  @Post('commit')
   @HttpCode(HttpStatus.OK)
   @UseFilters(FileTooLargeFilter)
   @UseInterceptors(upload)
   commit(
     @CurrentUser() actor: SessionUser,
-    @Param('step') step: string,
     @Body(new ZodPipe(bodySchema)) body: Body,
     @UploadedFile() file: IncomingFile | undefined,
     @Req() req: Request,
   ): Promise<ImportResult> {
-    return stepOf(step) === 'units'
-      ? this.imports.commitUnits(actor, bufferOf(file), req.ip)
-      : this.imports.commitOwners(actor, bufferOf(file), body.resolutions, req.ip);
+    return this.imports.commit(actor, bufferOf(file), body.resolutions, req.ip);
   }
 }

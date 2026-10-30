@@ -1,23 +1,9 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-  Put,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Put, Query, Req } from '@nestjs/common';
 import {
   linkUserSchema,
-  mergeOwnerSchema,
   OwnerDetail,
-  OwnerFields,
   OwnerItem,
-  ownerSchema,
+  ownerNoteSchema,
   Page,
   SessionUser,
   TemporaryPasswordResponse,
@@ -28,7 +14,10 @@ import { CurrentUser, Roles } from '../auth/decorators';
 import { ZodPipe } from '../common/zod.pipe';
 import { OwnerListQuery, ownerListQuerySchema, OwnersService } from './owners.service';
 
-/** Собственники (ТЗ п. 8.12, 9). Только для администраторов: здесь номера документов. */
+/**
+ * Собственники (ТЗ п. 8.12, 9). Только для администраторов: здесь номера документов.
+ * Собственников создаёт и меняет только импорт; вручную — заметка и учётная запись.
+ */
 @Controller('owners')
 @Roles('ADMIN')
 export class OwnersController {
@@ -39,28 +28,19 @@ export class OwnersController {
     return this.owners.list(query);
   }
 
-  @Post()
-  async create(
-    @CurrentUser() actor: SessionUser,
-    @Body(new ZodPipe(ownerSchema)) body: OwnerFields,
-    @Req() req: Request,
-  ): Promise<{ owner: OwnerDetail }> {
-    return { owner: await this.owners.create(actor, body, req.ip) };
-  }
-
   @Get(':id')
   async get(@Param('id') id: string): Promise<{ owner: OwnerDetail }> {
     return { owner: await this.owners.get(id) };
   }
 
-  @Put(':id')
-  async update(
+  @Put(':id/note')
+  async updateNote(
     @CurrentUser() actor: SessionUser,
     @Param('id') id: string,
-    @Body(new ZodPipe(ownerSchema)) body: OwnerFields,
+    @Body(new ZodPipe(ownerNoteSchema)) body: z.output<typeof ownerNoteSchema>,
     @Req() req: Request,
   ): Promise<{ owner: OwnerDetail }> {
-    return { owner: await this.owners.update(actor, id, body, req.ip) };
+    return { owner: await this.owners.updateNote(actor, id, body.note, req.ip) };
   }
 
   @Put(':id/user')
@@ -80,21 +60,5 @@ export class OwnersController {
     @Req() req: Request,
   ): Promise<{ owner: OwnerDetail }> {
     return { owner: await this.owners.unlinkUser(actor, id, req.ip) };
-  }
-
-  @Post(':id/merge')
-  async merge(
-    @CurrentUser() actor: SessionUser,
-    @Param('id') id: string,
-    @Body(new ZodPipe(mergeOwnerSchema)) body: z.output<typeof mergeOwnerSchema>,
-    @Req() req: Request,
-  ): Promise<{ owner: OwnerDetail }> {
-    return { owner: await this.owners.merge(actor, id, body.duplicateId, req.ip) };
-  }
-
-  @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@CurrentUser() actor: SessionUser, @Param('id') id: string, @Req() req: Request) {
-    return this.owners.remove(actor, id, req.ip);
   }
 }
