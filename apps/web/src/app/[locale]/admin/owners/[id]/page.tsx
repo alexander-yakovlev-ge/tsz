@@ -1,16 +1,14 @@
-import { ownerName, type OwnerDetail, type UserListItem } from '@tsz/shared';
+import { formatPhone, ownerName, type OwnerDetail, type UserListItem } from '@tsz/shared';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
-import { DeleteButton } from '@/components/delete-button';
-import { ShareText, UnitName } from '@/components/registry';
+import { RegistryName, ShareText, UnitName } from '@/components/registry';
 import { Badge, Card, PageTitle } from '@/components/ui';
 import { Link } from '@/i18n/navigation';
 import { readLocale } from '@/i18n/params';
 import { apiGet } from '@/lib/api';
-import { OwnerForm } from '../owner-form';
 import { AccountLink } from './account-link';
-import { MergeOwner } from './merge-owner';
+import { NoteForm } from './note-form';
 
 interface Props {
   params: Promise<{ locale: string; id: string }>;
@@ -45,10 +43,16 @@ export default async function OwnerPage({ params }: Props) {
         {t('back')}
       </Link>
       <div className="flex flex-col gap-2">
-        <PageTitle>{ownerName(owner)}</PageTitle>
+        <PageTitle>
+          <RegistryName name={ownerName(owner)} />
+        </PageTitle>
         <span className="flex flex-wrap items-center gap-2 text-gray-600">
           <Badge>{tu(`ownerKinds.${owner.kind}`)}</Badge>
-          {owner.displayName && <span lang="ka">{owner.registryName}</span>}
+          {owner.displayName && (
+            <span>
+              <RegistryName name={owner.registryName} />
+            </span>
+          )}
         </span>
       </div>
 
@@ -81,24 +85,24 @@ export default async function OwnerPage({ params }: Props) {
 
       <Card>
         <h2 className="mb-4 text-xl font-bold">{t('dataTitle')}</h2>
-        <OwnerForm owner={owner} />
-      </Card>
-
-      <Card>
-        <h2 className="mb-2 text-xl font-bold">{t('mergeTitle')}</h2>
-        <p className="mb-4 text-sm text-gray-600">{t('mergeHint')}</p>
-        <MergeOwner owner={owner} />
-      </Card>
-
-      <Card className="border-red-200">
-        <h2 className="mb-2 text-xl font-bold">{t('deleteTitle')}</h2>
-        <p className="mb-4 text-sm text-gray-600">{t('deleteHint')}</p>
-        <DeleteButton
-          path={`/api/owners/${owner.id}`}
-          confirm={t('deleteConfirm', { name: ownerName(owner) })}
-          label={t('delete')}
-          redirectTo="/admin/owners"
-        />
+        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[auto_1fr]">
+          <dt className="text-gray-600">{t('kind')}</dt>
+          <dd>{tu(`ownerKinds.${owner.kind}`)}</dd>
+          <dt className="text-gray-600">{t('registryName')}</dt>
+          <dd>
+            <RegistryName name={owner.registryName} />
+          </dd>
+          <dt className="text-gray-600">{t('displayName')}</dt>
+          <dd>{owner.displayName ?? '—'}</dd>
+          <dt className="text-gray-600">{t('phone')}</dt>
+          <dd className="tabular-nums">{owner.phone ? formatPhone(owner.phone) : '—'}</dd>
+          <dt className="text-gray-600">{t('idNumbers')}</dt>
+          <dd className="tabular-nums">{owner.idNumbers.join(', ') || '—'}</dd>
+        </dl>
+        <p className="mt-4 text-sm text-gray-600">{t('registryHint')}</p>
+        <div className="mt-6 border-t border-gray-100 pt-6">
+          <NoteForm owner={owner} />
+        </div>
       </Card>
     </div>
   );

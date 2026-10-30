@@ -44,6 +44,7 @@ function toUnitOwner(
     ownerKind: ownership.owner.kind,
     registryName: ownership.owner.registryName,
     displayName: ownership.owner.displayName,
+    phone: ownership.owner.phone,
     share: toShare(ownership),
     shareNote: ownership.shareNote,
     isContact: ownership.isContact,
@@ -87,6 +88,7 @@ export function toOwnerItem(owner: OwnerWithUnits): OwnerItem {
     kind: owner.kind,
     registryName: owner.registryName,
     displayName: owner.displayName,
+    phone: owner.phone,
     units: owner.ownerships.map(toOwnerUnit),
     user: toLinkedUser(owner.user),
   };

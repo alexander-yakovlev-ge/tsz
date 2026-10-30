@@ -4,9 +4,12 @@ import {
   ImportChange,
   ImportIssue,
   ImportIssueCode,
+  ImportPreview,
+  ImportPreviewSummary,
   ImportResult,
   ImportSummary,
   idNumbersField,
+  normalizePhone,
   OWNER_KINDS,
   OwnerCandidate,
   OwnerImportGroup,
@@ -14,14 +17,12 @@ import {
   OwnerMatch,
   OwnerResolutions,
   OwnershipImportRow,
-  OwnersPreview,
   parseShare,
   SessionUser,
   Share,
   UnitFields,
   UnitImportRow,
   unitSchema,
-  UnitsPreview,
 } from '@tsz/shared';
 import { AuditService } from '../../audit/audit.service';
 import { ApiError } from '../../common/api-error';
@@ -36,12 +37,18 @@ type Db = Prisma.TransactionClient;
 /** Импорты не выполняются параллельно: второй ждёт первого (pg_advisory_xact_lock). */
 const IMPORT_LOCK = 4_200_001;
 
-const UNIT_COLUMNS = { required: ['cadastral_code', 'kind', 'number', 'area_m2'] } as const;
-const OWNER_COLUMNS = {
-  required: ['cadastral_code', 'owner_key', 'owner_kind', 'registry_name'],
-} as const;
+/** Обязательные столбцы registry.csv: помещение и собственник в одной строке. */
+const REQUIRED_COLUMNS = [
+  'cadastral_code',
+  'kind',
+  'number',
+  'area_m2',
+  'owner_key',
+  'owner_kind',
+  'registry_name',
+] as const;
 
-/** Поле схемы помещения → столбец units.csv. */
+/** Поле схемы помещения → столбец registry.csv. */
 const UNIT_FIELD_COLUMNS: Record<string, string> = {
   kind: 'kind',
   cadastralCode: 'cadastral_code',
@@ -49,7 +56,6 @@ const UNIT_FIELD_COLUMNS: Record<string, string> = {
   floor: 'floor',
   floorLabel: 'floor_label',
   areaM2: 'area_m2',
-  tariffCategory: 'tariff_category',
 };
 
 function issueCode(message: string): ImportIssueCode {
@@ -66,10 +72,7 @@ function count(summary: ImportSummary, action: string): void {
   }
 }
 
-function readTable(
-  buffer: Buffer,
-  required: readonly string[],
-): { table: CsvTable; fileIssues: ImportIssue[] } {
+function readTable(buffer: Buffer): { table: CsvTable; fileIssues: ImportIssue[] } {
   let table: CsvTable;
   try {
     table = parseCsv(buffer);
@@ -79,9 +82,9 @@ function readTable(
     }
     throw error;
   }
-  const fileIssues: ImportIssue[] = required
-    .filter((column) => !table.columns.includes(column))
-    .map((column) => ({ column, code: 'MISSING_COLUMN' as const }));
+  const fileIssues: ImportIssue[] = REQUIRED_COLUMNS.filter(
+    (column) => !table.columns.includes(column),
+  ).map((column) => ({ column, code: 'MISSING_COLUMN' as const }));
   if (fileIssues.length === 0 && table.rows.length === 0) {
     fileIssues.push({ code: 'EMPTY_FILE' });
   }
@@ -105,13 +108,10 @@ function shareText(share: Share | null): string {
 
 // --- Помещения ---
 
-interface UnitPlan {
-  preview: UnitsPreview;
-  creates: UnitFields[];
-  updates: { id: string; input: UnitFields }[];
-}
-
-/** Строка units.csv → поля помещения или ошибки по столбцам. */
+/**
+ * Данные помещения из строки. Категории тарифа в выписке нет: новая квартира получает FULL,
+ * дальше категорию ведёт администратор (ТЗ п. 8.1, 8.10).
+ */
 function parseUnitRow(row: CsvRow): { input?: UnitFields; issues: ImportIssue[] } {
   const v = row.values;
   const issues: ImportIssue[] = [];
@@ -123,14 +123,15 @@ function parseUnitRow(row: CsvRow): { input?: UnitFields; issues: ImportIssue[] 
       issues.push({ column: 'floor', code: 'INVALID_VALUE' });
     }
   }
+  const kind = v.kind?.toUpperCase() || undefined;
   const result = unitSchema.safeParse({
-    kind: v.kind?.toUpperCase() || undefined,
+    kind,
     cadastralCode: v.cadastral_code ?? '',
     number: v.number ?? '',
     floor,
     floorLabel: v.floor_label ?? null,
     areaM2: v.area_m2 ?? '',
-    tariffCategory: v.tariff_category?.toUpperCase() || null,
+    tariffCategory: kind === 'APARTMENT' ? 'FULL' : null,
   });
   if (!result.success) {
     for (const issue of result.error.issues) {
@@ -143,77 +144,30 @@ function parseUnitRow(row: CsvRow): { input?: UnitFields; issues: ImportIssue[] 
   return issues.length > 0 || !result.success ? { issues } : { input: result.data, issues };
 }
 
-async function planUnits(db: Db, buffer: Buffer): Promise<UnitPlan> {
-  const { table, fileIssues } = readTable(buffer, UNIT_COLUMNS.required);
-  const summary = emptySummary();
-  const plan: UnitPlan = {
-    preview: { step: 'units', fileIssues, rows: [], summary, ready: false },
-    creates: [],
-    updates: [],
-  };
-  if (fileIssues.length > 0) {
-    return plan;
-  }
+/** Данные помещения без категории — для проверки, что строки одного помещения совпадают. */
+function unitFingerprint(input: UnitFields): string {
+  const { tariffCategory: _category, ...fields } = input;
+  return JSON.stringify(fields);
+}
 
-  const parsed = table.rows.map((row) => ({ row, ...parseUnitRow(row) }));
-  const codes = parsed.flatMap(({ input }) => (input ? [input.cadastralCode] : []));
-  const existing = new Map(
-    (await db.unit.findMany({ where: { cadastralCode: { in: codes } } })).map((unit) => [
-      unit.cadastralCode,
-      unit,
-    ]),
-  );
-  const seen = new Set<string>();
-
-  for (const { row, input, issues } of parsed) {
-    const code = input?.cadastralCode ?? row.values.cadastral_code ?? '';
-    if (input && seen.has(code)) {
-      issues.push({ column: 'cadastral_code', code: 'DUPLICATE_ROW' });
-    }
-    seen.add(code);
-    const current = existing.get(code);
-    let action: UnitImportRow['action'];
-    let changes: ImportChange[] = [];
-    if (!input || issues.length > 0) {
-      action = 'error';
-    } else if (!current) {
-      action = 'create';
-      plan.creates.push(input);
-    } else {
-      changes = Object.entries(unitChanges(current, input)).map(([field, change]) => ({
-        field,
-        ...change,
-      }));
-      action = changes.length > 0 ? 'update' : 'unchanged';
-      if (action === 'update') {
-        plan.updates.push({ id: current.id, input });
-      }
-    }
-    count(summary, action);
-    plan.preview.rows.push({
-      line: row.line,
-      cadastralCode: code,
-      kind: input?.kind ?? null,
-      number: input?.number ?? row.values.number ?? '',
-      tariffCategory: input?.tariffCategory ?? null,
-      action,
-      changes,
-      issues,
-    });
-  }
-  plan.preview.ready = summary.error === 0;
-  return plan;
+/** Категория остаётся текущей, пока не сменился вид помещения (ТЗ п. 8.10). */
+function keepCategory(current: Unit, input: UnitFields): UnitFields {
+  return current.kind === input.kind ? { ...input, tariffCategory: current.tariffCategory } : input;
 }
 
 // --- Собственники ---
 
 interface OwnerRow {
   row: CsvRow;
+  /** Кадастровый код помещения строки */
+  code: string;
+  /** Помещение уже есть в БД; новое создаётся этим же импортом */
+  unit: Unit | null;
   key: string;
   kind: OwnerKind | null;
   registryName: string;
   idNumbers: string[];
-  unit: Unit | null;
+  phone: string | null;
   share: Share | null;
   shareNote: string | null;
   isContact: boolean;
@@ -225,6 +179,7 @@ interface Group {
   kind: OwnerKind | null;
   registryName: string;
   idNumbers: string[];
+  phone: string | null;
   rows: OwnerRow[];
   error: boolean;
   match: OwnerMatch;
@@ -235,19 +190,26 @@ interface ExistingOwner {
   kind: OwnerKind;
   registryName: string;
   displayName: string | null;
+  phone: string | null;
   idHashes: string[];
   unitIds: Set<string>;
   unitNumbers: string[];
 }
 
-interface OwnerPlan {
-  preview: OwnersPreview;
+type Target = { ownerId: string } | { createdBy: string };
+
+interface Plan {
+  preview: ImportPreview;
+  unitCreates: UnitFields[];
+  unitUpdates: { id: string; input: UnitFields }[];
   groups: Group[];
   /** Итоговый собственник группы: существующий id или ключ группы, которая его создаст */
-  target: Map<string, { ownerId: string } | { createdBy: string }>;
+  target: Map<string, Target>;
+  /** Новый телефон найденного собственника */
+  phones: Map<string, string>;
 }
 
-function parseOwnerRow(row: CsvRow, units: Map<string, Unit>): OwnerRow {
+function parseOwnerRow(row: CsvRow, code: string, unit: Unit | null): OwnerRow {
   const v = row.values;
   const issues: ImportIssue[] = [];
   const require = (column: string, max: number): string => {
@@ -268,16 +230,15 @@ function parseOwnerRow(row: CsvRow, units: Map<string, Unit>): OwnerRow {
   if (!kind) {
     issues.push({ column: 'owner_kind', code: kindText ? 'INVALID_VALUE' : 'REQUIRED' });
   }
-  const code = require('cadastral_code', 64);
-  const unit = code ? (units.get(code) ?? null) : null;
-  if (code && !unit) {
-    issues.push({ column: 'cadastral_code', code: 'UNKNOWN_UNIT' });
-  }
   const ids = idNumbersField.safeParse(
     (v.id_numbers ?? '').split('|').filter((value) => value.trim()),
   );
   if (!ids.success) {
     issues.push({ column: 'id_numbers', code: 'INVALID_VALUE' });
+  }
+  const phone = v.phone ? normalizePhone(v.phone) : null;
+  if (v.phone && !phone) {
+    issues.push({ column: 'phone', code: 'INVALID_VALUE' });
   }
   const share = parseShare(v.share ?? '');
   if (share === null) {
@@ -293,11 +254,13 @@ function parseOwnerRow(row: CsvRow, units: Map<string, Unit>): OwnerRow {
   }
   return {
     row,
+    code,
+    unit,
     key,
     kind,
     registryName,
     idNumbers: ids.success ? ids.data : [],
-    unit,
+    phone,
     share: share ?? null,
     shareNote,
     isContact: isContact ?? false,
@@ -388,39 +351,115 @@ async function loadOwners(db: Db): Promise<ExistingOwner[]> {
     kind: owner.kind,
     registryName: owner.registryName,
     displayName: owner.displayName,
+    phone: owner.phone,
     idHashes: owner.idHashes,
     unitIds: new Set(owner.ownerships.map((ownership) => ownership.unitId)),
     unitNumbers: owner.ownerships.map((ownership) => ownership.unit.number),
   }));
 }
 
-async function planOwners(
+/**
+ * План импорта registry.csv (ТЗ п. 8.10): помещения по кадастровому коду, затем собственники
+ * по меткам файла и права собственности. Ничего не удаляет — это синхронизация (этап 7).
+ */
+async function planRegistry(
   db: Db,
   buffer: Buffer,
   resolutions: OwnerResolutions,
   hash: (n: string) => string,
-): Promise<OwnerPlan> {
-  const { table, fileIssues } = readTable(buffer, OWNER_COLUMNS.required);
-  const summary = { ...emptySummary(), newOwners: 0, ambiguous: 0 };
-  const plan: OwnerPlan = {
-    preview: { step: 'owners', fileIssues, owners: [], rows: [], summary, ready: false },
+): Promise<Plan> {
+  const { table, fileIssues } = readTable(buffer);
+  const summary: ImportPreviewSummary = {
+    units: emptySummary(),
+    ownerships: emptySummary(),
+    newOwners: 0,
+    ownerUpdates: 0,
+    ambiguous: 0,
+  };
+  const plan: Plan = {
+    preview: { fileIssues, units: [], owners: [], rows: [], summary, ready: false },
+    unitCreates: [],
+    unitUpdates: [],
     groups: [],
     target: new Map(),
+    phones: new Map(),
   };
   if (fileIssues.length > 0) {
     return plan;
   }
 
+  // Помещения: первая строка с кадастровым кодом задаёт данные, остальные должны совпадать.
   const codes = table.rows.map((row) => row.values.cadastral_code ?? '').filter(Boolean);
-  const units = new Map(
+  const existing = new Map(
     (await db.unit.findMany({ where: { cadastralCode: { in: codes } } })).map((unit) => [
       unit.cadastralCode,
       unit,
     ]),
   );
-  const rows = table.rows.map((row) => parseOwnerRow(row, units));
+  const firstOf = new Map<string, { fingerprint: string | null; ok: boolean }>();
+  const rowIssues = new Map<CsvRow, ImportIssue[]>();
+  for (const row of table.rows) {
+    const code = row.values.cadastral_code ?? '';
+    const { input: fileInput, issues } = parseUnitRow(row);
+    const first = code ? firstOf.get(code) : undefined;
+    if (first) {
+      rowIssues.set(
+        row,
+        first.ok && fileInput && unitFingerprint(fileInput) !== first.fingerprint
+          ? [{ column: 'cadastral_code', code: 'UNIT_MISMATCH' }]
+          : first.ok
+            ? []
+            : [{ code: 'UNIT_ERROR' }],
+      );
+      continue;
+    }
+    const current = existing.get(code);
+    const input = fileInput && current ? keepCategory(current, fileInput) : fileInput;
+    let action: UnitImportRow['action'];
+    let changes: ImportChange[] = [];
+    if (!input || issues.length > 0) {
+      action = 'error';
+    } else if (!current) {
+      action = 'create';
+      plan.unitCreates.push(input);
+    } else {
+      changes = Object.entries(unitChanges(current, input)).map(([field, change]) => ({
+        field,
+        ...change,
+      }));
+      action = changes.length > 0 ? 'update' : 'unchanged';
+      if (action === 'update') {
+        plan.unitUpdates.push({ id: current.id, input });
+      }
+    }
+    if (code) {
+      firstOf.set(code, {
+        fingerprint: input ? unitFingerprint(input) : null,
+        ok: action !== 'error',
+      });
+    }
+    rowIssues.set(row, action === 'error' ? [{ code: 'UNIT_ERROR' }] : []);
+    count(summary.units, action);
+    plan.preview.units.push({
+      line: row.line,
+      cadastralCode: code,
+      kind: input?.kind ?? null,
+      number: input?.number ?? row.values.number ?? '',
+      tariffCategory: input?.tariffCategory ?? null,
+      action,
+      changes,
+      issues,
+    });
+  }
 
-  // Группы по owner_key: вид и имя одинаковы во всех строках одного лица.
+  const rows = table.rows.map((row) => {
+    const code = row.values.cadastral_code ?? '';
+    const owner = parseOwnerRow(row, code, existing.get(code) ?? null);
+    owner.issues.unshift(...(rowIssues.get(row) ?? []));
+    return owner;
+  });
+
+  // Группы по owner_key: вид, имя и телефон одинаковы во всех строках одного лица.
   const groups = new Map<string, Group>();
   for (const row of rows) {
     if (!row.key) {
@@ -433,6 +472,7 @@ async function planOwners(
         kind: row.kind,
         registryName: row.registryName,
         idNumbers: [],
+        phone: null,
         rows: [],
         error: false,
         match: { status: 'new' },
@@ -444,6 +484,10 @@ async function planOwners(
     ) {
       row.issues.push({ column: 'owner_key', code: 'OWNER_MISMATCH' });
     }
+    if (row.phone && group.phone && row.phone !== group.phone) {
+      row.issues.push({ column: 'phone', code: 'OWNER_MISMATCH' });
+    }
+    group.phone ??= row.phone;
     group.rows.push(row);
     group.idNumbers = [...new Set([...group.idNumbers, ...row.idNumbers])];
   }
@@ -466,14 +510,14 @@ async function planOwners(
   const pairs = new Set<string>();
   const contacts = new Map<string, OwnerRow[]>();
   for (const row of rows) {
-    if (row.unit && row.key) {
-      const pair = `${row.unit.id}|${row.key}`;
+    if (row.code && row.key) {
+      const pair = `${row.code}|${row.key}`;
       if (pairs.has(pair)) {
         row.issues.push({ code: 'DUPLICATE_ROW' });
       }
       pairs.add(pair);
       if (row.isContact) {
-        contacts.set(row.unit.id, [...(contacts.get(row.unit.id) ?? []), row]);
+        contacts.set(row.code, [...(contacts.get(row.code) ?? []), row]);
       }
     }
   }
@@ -566,7 +610,7 @@ async function planOwners(
   }
 
   // Итоговый собственник: метка «то же лицо» указывает только на более раннюю — циклов нет.
-  const resolve = (group: Group): { ownerId: string } | { createdBy: string } | null => {
+  const resolve = (group: Group): Target | null => {
     const match = group.match;
     if (match.status === 'matched') {
       return { ownerId: match.ownerId };
@@ -587,11 +631,12 @@ async function planOwners(
     }
   }
 
-  // Права собственности: что создастся и что изменится.
+  // Права собственности: что создастся и что изменится. Ключ пары — кадастровый код.
+  const codeOf = new Map([...existing.values()].map((unit) => [unit.id, unit.cadastralCode]));
   const ownershipList = await db.unitOwnership.findMany({
-    where: { unitId: { in: [...units.values()].map((unit) => unit.id) } },
+    where: { unitId: { in: [...codeOf.keys()] } },
   });
-  const ownerships = new Map(ownershipList.map((o) => [`${o.unitId}|${o.ownerId}`, o]));
+  const ownerships = new Map(ownershipList.map((o) => [`${codeOf.get(o.unitId)}|${o.ownerId}`, o]));
   const targetPairs = new Set<string>();
   for (const row of rows) {
     const group = groups.get(row.key);
@@ -604,7 +649,7 @@ async function planOwners(
       action = 'pending';
     } else {
       const targetKey = 'ownerId' in target ? target.ownerId : `new:${target.createdBy}`;
-      const pair = `${row.unit!.id}|${targetKey}`;
+      const pair = `${row.code}|${targetKey}`;
       if (targetPairs.has(pair)) {
         // Две метки одного лица с одним помещением.
         row.issues.push({ code: 'DUPLICATE_ROW' });
@@ -634,12 +679,12 @@ async function planOwners(
         }
       }
     }
-    count(summary, action);
+    count(summary.ownerships, action);
     plan.preview.rows.push({
       line: row.row.line,
       key: row.key,
-      cadastralCode: row.row.values.cadastral_code ?? '',
-      unitNumber: row.unit?.number ?? null,
+      cadastralCode: row.code,
+      unitNumber: row.row.values.number || null,
       share: row.share,
       shareNote: row.shareNote,
       isContact: row.isContact,
@@ -654,24 +699,39 @@ async function planOwners(
     const matched =
       target && 'ownerId' in target ? owners.find((o) => o.id === target.ownerId) : undefined;
     const known = new Set(matched?.idHashes ?? []);
+    const addedIdNumbers = matched ? group.idNumbers.filter((n) => !known.has(hash(n))).length : 0;
+    // Пустой телефон в файле не стирает сохранённый.
+    const changes: ImportChange[] =
+      matched && group.phone && group.phone !== matched.phone
+        ? [{ field: 'phone', from: matched.phone ?? '', to: group.phone }]
+        : [];
+    if (matched && group.phone && changes.length > 0) {
+      plan.phones.set(matched.id, group.phone);
+    }
     if (group.match.status === 'new') {
       summary.newOwners++;
     }
     if (group.match.status === 'ambiguous') {
       summary.ambiguous++;
     }
+    if (addedIdNumbers > 0 || changes.length > 0) {
+      summary.ownerUpdates++;
+    }
     plan.preview.owners.push({
       key: group.key,
       kind: group.kind,
       registryName: group.registryName,
       idNumberCount: group.idNumbers.length,
+      phone: group.phone,
       lines: group.rows.map((row) => row.row.line),
       match: group.match,
-      addedIdNumbers: matched ? group.idNumbers.filter((n) => !known.has(hash(n))).length : 0,
+      addedIdNumbers,
+      changes,
     } satisfies OwnerImportGroup);
   }
   plan.groups = [...groups.values()];
-  plan.preview.ready = summary.error === 0 && summary.ambiguous === 0;
+  plan.preview.ready =
+    summary.units.error === 0 && summary.ownerships.error === 0 && summary.ambiguous === 0;
   return plan;
 }
 
@@ -684,44 +744,13 @@ export class ImportService {
     private readonly audit: AuditService,
   ) {}
 
-  async previewUnits(buffer: Buffer): Promise<UnitsPreview> {
-    return (await planUnits(this.prisma, buffer)).preview;
-  }
-
-  async previewOwners(buffer: Buffer, resolutions: OwnerResolutions): Promise<OwnersPreview> {
-    return (await planOwners(this.prisma, buffer, resolutions, (n) => this.ownerIds.hash(n)))
+  async preview(buffer: Buffer, resolutions: OwnerResolutions): Promise<ImportPreview> {
+    return (await planRegistry(this.prisma, buffer, resolutions, (n) => this.ownerIds.hash(n)))
       .preview;
   }
 
   /** Проверка повторяется внутри транзакции: применяется ровно то, что прошло проверку. */
-  async commitUnits(actor: SessionUser, buffer: Buffer, ip?: string): Promise<ImportResult> {
-    const summary = await this.prisma.$transaction(
-      async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${IMPORT_LOCK})`;
-        const plan = await planUnits(tx, buffer);
-        if (!plan.preview.ready) {
-          throw new ApiError(HttpStatus.CONFLICT, 'IMPORT_NOT_READY');
-        }
-        if (plan.creates.length > 0) {
-          await tx.unit.createMany({ data: plan.creates.map(unitData) });
-        }
-        for (const update of plan.updates) {
-          await tx.unit.update({ where: { id: update.id }, data: unitData(update.input) });
-        }
-        return plan.preview.summary;
-      },
-      { timeout: 60_000 },
-    );
-    await this.audit.log({
-      userId: actor.id,
-      action: 'import.units',
-      payload: { ...summary },
-      ip,
-    });
-    return { step: 'units', summary };
-  }
-
-  async commitOwners(
+  async commit(
     actor: SessionUser,
     buffer: Buffer,
     resolutions: OwnerResolutions,
@@ -731,14 +760,21 @@ export class ImportService {
     const result = await this.prisma.$transaction(
       async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${IMPORT_LOCK})`;
-        const plan = await planOwners(tx, buffer, resolutions, hash);
+        const plan = await planRegistry(tx, buffer, resolutions, hash);
         if (!plan.preview.ready) {
           throw new ApiError(HttpStatus.CONFLICT, 'IMPORT_NOT_READY');
         }
 
-        // Новые собственники и новые номера документов у найденных.
+        // Помещения.
+        if (plan.unitCreates.length > 0) {
+          await tx.unit.createMany({ data: plan.unitCreates.map(unitData) });
+        }
+        for (const update of plan.unitUpdates) {
+          await tx.unit.update({ where: { id: update.id }, data: unitData(update.input) });
+        }
+
+        // Новые собственники; у найденных — новые номера документов и телефон.
         const created = new Map<string, string>();
-        let addedIdNumbers = 0;
         for (const group of plan.groups) {
           const target = plan.target.get(group.key)!;
           if ('createdBy' in target && target.createdBy === group.key) {
@@ -746,6 +782,7 @@ export class ImportService {
               data: {
                 kind: group.kind!,
                 registryName: group.registryName,
+                phone: group.phone,
                 ...this.ownerIds.seal(group.idNumbers),
               },
             });
@@ -764,6 +801,7 @@ export class ImportService {
             idsByOwner.set(ownerId, [...(idsByOwner.get(ownerId) ?? []), ...group.idNumbers]);
           }
         }
+        let addedIdNumbers = 0;
         for (const [ownerId, numbers] of idsByOwner) {
           const owner = await tx.owner.findUniqueOrThrow({ where: { id: ownerId } });
           const current = this.ownerIds.open(owner.idNumbers);
@@ -772,6 +810,9 @@ export class ImportService {
             addedIdNumbers += merged.length - current.length;
             await tx.owner.update({ where: { id: ownerId }, data: this.ownerIds.seal(merged) });
           }
+        }
+        for (const [ownerId, phone] of plan.phones) {
+          await tx.owner.update({ where: { id: ownerId }, data: { phone } });
         }
 
         // Права собственности: сначала снимаются отметки контактных лиц, затем записываются строки.
@@ -812,8 +853,8 @@ export class ImportService {
         }
         return {
           summary: plan.preview.summary,
-          newOwners: created.size,
           addedIdNumbers,
+          phones: plan.phones.size,
           manual: plan.preview.owners.filter(
             (owner) =>
               (owner.match.status === 'matched' && owner.match.by === 'MANUAL') ||
@@ -826,23 +867,18 @@ export class ImportService {
     const { summary } = result;
     await this.audit.log({
       userId: actor.id,
-      action: 'import.owners',
+      action: 'import.registry',
       payload: {
-        ...summary,
-        newOwners: result.newOwners,
+        units: { ...summary.units },
+        ownerships: { ...summary.ownerships },
+        newOwners: summary.newOwners,
+        ownerUpdates: summary.ownerUpdates,
         addedIdNumbers: result.addedIdNumbers,
+        phones: result.phones,
         manualResolutions: result.manual,
       },
       ip,
     });
-    return {
-      step: 'owners',
-      summary: {
-        create: summary.create,
-        update: summary.update,
-        unchanged: summary.unchanged,
-        error: summary.error,
-      },
-    };
+    return { summary };
   }
 }

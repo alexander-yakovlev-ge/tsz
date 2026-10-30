@@ -115,17 +115,16 @@ export function uploadDocument(
 }
 
 /** CSV для импорта (ТЗ п. 8.10): шаг units или owners, предпросмотр или применение. */
-export function importCsv(
+export function importRegistry(
   request: APIRequestContext,
-  step: 'units' | 'owners',
   action: 'preview' | 'commit',
   csv: Buffer | string,
   resolutions?: Record<string, string>,
 ): Promise<APIResponse> {
-  return request.post(`/api/import/${step}/${action}`, {
+  return request.post(`/api/import/${action}`, {
     headers: ORIGIN,
     multipart: {
-      file: { name: `${step}.csv`, mimeType: 'text/csv', buffer: Buffer.from(csv) },
+      file: { name: 'registry.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) },
       ...(resolutions ? { resolutions: JSON.stringify(resolutions) } : {}),
     },
   });

@@ -2,14 +2,13 @@ import { displayUnitNumber, type UnitDocumentItem, type UnitItem } from '@tsz/sh
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
-import { DeleteButton } from '@/components/delete-button';
 import { Badge, Card, PageTitle } from '@/components/ui';
 import { UnitDocuments } from '@/components/unit-documents';
 import { Link } from '@/i18n/navigation';
 import { readLocale } from '@/i18n/params';
 import { apiGet } from '@/lib/api';
-import { UnitForm } from '../unit-form';
-import { OwnershipsEditor } from './ownerships-editor';
+import { CategoryForm } from './category-form';
+import { UnitOwners } from './unit-owners';
 
 interface Props {
   params: Promise<{ locale: string; id: string }>;
@@ -21,7 +20,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: t('editTitle') };
 }
 
-/** Карточка помещения (ТЗ п. 8.1): данные, собственники, документы. Операции — этап 5. */
+/**
+ * Карточка помещения (ТЗ п. 8.1): данные и собственники по выписке — только для чтения,
+ * вручную — категория тарифа и документы. Операции — этап 5.
+ */
 export default async function UnitPage({ params }: Props) {
   const { id } = await params;
   const locale = await readLocale(params);
@@ -52,25 +54,38 @@ export default async function UnitPage({ params }: Props) {
       </div>
       <Card>
         <h2 className="mb-4 text-xl font-bold">{t('ownersTitle')}</h2>
-        <OwnershipsEditor unit={unit} />
+        <UnitOwners unit={unit} />
       </Card>
       <Card>
         <h2 className="mb-4 text-xl font-bold">{t('dataTitle')}</h2>
-        <UnitForm unit={unit} />
+        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[auto_1fr]">
+          <dt className="text-gray-600">{t('kind')}</dt>
+          <dd>{tu(`kinds.${unit.kind}`)}</dd>
+          <dt className="text-gray-600">{t('cadastralCode')}</dt>
+          <dd className="tabular-nums">{unit.cadastralCode}</dd>
+          <dt className="text-gray-600">{t('number')}</dt>
+          <dd lang="ka">{unit.number}</dd>
+          <dt className="text-gray-600">{t('floor')}</dt>
+          <dd>{unit.floorLabel ?? unit.floor ?? '—'}</dd>
+          <dt className="text-gray-600">{t('area')}</dt>
+          <dd className="tabular-nums">{t('areaValue', { area: Number(unit.areaM2) })}</dd>
+          {unit.kind !== 'APARTMENT' && (
+            <>
+              <dt className="text-gray-600">{t('category')}</dt>
+              <dd>—</dd>
+            </>
+          )}
+        </dl>
+        <p className="mt-4 text-sm text-gray-600">{t('registryHint')}</p>
+        {unit.kind === 'APARTMENT' && (
+          <div className="mt-6 border-t border-gray-100 pt-6">
+            <CategoryForm unit={unit} />
+          </div>
+        )}
       </Card>
       <Card>
         <h2 className="mb-4 text-xl font-bold">{t('documentsTitle')}</h2>
         <UnitDocuments unitId={unit.id} documents={documentsResult?.documents ?? []} manage />
-      </Card>
-      <Card className="border-red-200">
-        <h2 className="mb-2 text-xl font-bold">{t('deleteTitle')}</h2>
-        <p className="mb-4 text-sm text-gray-600">{t('deleteHint')}</p>
-        <DeleteButton
-          path={`/api/units/${unit.id}`}
-          confirm={t('deleteConfirm', { name: title })}
-          label={t('delete')}
-          redirectTo="/admin/units"
-        />
       </Card>
     </div>
   );

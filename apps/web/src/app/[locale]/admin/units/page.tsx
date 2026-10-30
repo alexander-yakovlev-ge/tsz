@@ -65,12 +65,7 @@ export default async function AdminUnitsPage({ params, searchParams }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <PageTitle>{t('title')}</PageTitle>
-        <Link href="/admin/units/new" className={buttonClass.primary}>
-          {t('add')}
-        </Link>
-      </div>
+      <PageTitle>{t('title')}</PageTitle>
 
       <form method="get" className="flex flex-wrap items-end gap-3" role="search">
         <label className="flex min-w-56 flex-[2_1_14rem] flex-col gap-1.5">

@@ -1,6 +1,13 @@
 'use client';
 
-import { displayUnitNumber, formatShare, ownerName, type Share, type UnitKind } from '@tsz/shared';
+import {
+  displayUnitNumber,
+  formatShare,
+  latinName,
+  ownerName,
+  type Share,
+  type UnitKind,
+} from '@tsz/shared';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from './ui';
 
@@ -17,6 +24,18 @@ export function ShareText({ share, note }: { share: Share | null; note: string |
   return text ? <span className="text-sm text-gray-600">{text}</span> : null;
 }
 
+/** Имя из реестра; на ru/en после грузинского написания — латинская транслитерация. */
+export function RegistryName({ name }: { name: string }) {
+  const locale = useLocale();
+  const latin = locale === 'ka' ? null : latinName(name);
+  return (
+    <>
+      <span lang="ka">{name}</span>
+      {latin && <span className="font-normal text-gray-600"> ({latin})</span>}
+    </>
+  );
+}
+
 /** Имя собственника: отображаемое, под ним — реестровое, если они различаются (ТЗ п. 4.3). */
 export function OwnerName({
   owner,
@@ -25,10 +44,12 @@ export function OwnerName({
 }) {
   return (
     <span className="flex flex-col">
-      <span>{ownerName(owner)}</span>
+      <span>
+        <RegistryName name={ownerName(owner)} />
+      </span>
       {owner.displayName && (
-        <span lang="ka" className="text-sm text-gray-600">
-          {owner.registryName}
+        <span className="text-sm text-gray-600">
+          <RegistryName name={owner.registryName} />
         </span>
       )}
     </span>

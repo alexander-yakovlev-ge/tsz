@@ -1,4 +1,4 @@
-import { OWNER_KINDS, type OwnerItem, type OwnerKind, type Page } from '@tsz/shared';
+import { formatPhone, OWNER_KINDS, type OwnerItem, type OwnerKind, type Page } from '@tsz/shared';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
@@ -55,12 +55,7 @@ export default async function AdminOwnersPage({ params, searchParams }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <PageTitle>{t('title')}</PageTitle>
-        <Link href="/admin/owners/new" className={buttonClass.primary}>
-          {t('add')}
-        </Link>
-      </div>
+      <PageTitle>{t('title')}</PageTitle>
 
       <form method="get" className="flex flex-wrap items-end gap-3" role="search">
         <label className="flex min-w-56 flex-[2_1_14rem] flex-col gap-1.5">
@@ -164,7 +159,18 @@ export default async function AdminOwnersPage({ params, searchParams }: Props) {
                     )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {owner.user ? owner.user.phone : <NoContactBadge />}
+                    {owner.user ? (
+                      owner.user.phone
+                    ) : (
+                      <span className="flex flex-col items-start gap-1">
+                        <NoContactBadge />
+                        {owner.phone && (
+                          <span className="text-sm text-gray-600">
+                            {t('registryPhone', { phone: formatPhone(owner.phone) })}
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1,14 +1,13 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { Prisma, Unit, UnitOwnership } from '@prisma/client';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { Prisma, Unit } from '@prisma/client';
 import { z } from 'zod';
 import {
-  addOwnershipSchema,
   normalizeIdNumber,
-  ownershipSchema,
   Page,
   searchUnitNumber,
   SessionUser,
   TARIFF_CATEGORIES,
+  TariffCategory,
   UNIT_KINDS,
   UNIT_PAGE_SIZE,
   UNIT_STATUSES,
@@ -20,12 +19,8 @@ import { AuditService } from '../audit/audit.service';
 import { ApiError } from '../common/api-error';
 import { isUuid } from '../common/ids';
 import { PrismaService } from '../prisma/prisma.service';
-import { StorageService } from '../storage/storage.service';
 import { toUnitItem, unitInclude } from './mappers';
 import { OwnerIdsService } from './owner-ids.service';
-
-type OwnershipFields = z.output<typeof ownershipSchema>;
-type AddOwnershipFields = z.output<typeof addOwnershipSchema>;
 
 export const unitListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(10_000).default(1),
@@ -40,10 +35,6 @@ export const unitListQuerySchema = z.object({
     .transform((value) => value === 'true'),
 });
 export type UnitListQuery = z.output<typeof unitListQuerySchema>;
-
-function isUniqueViolation(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
-}
 
 /** Поля помещения для БД; sort_key вычисляется из вида и номера. */
 export function unitData(input: UnitFields) {
@@ -80,15 +71,12 @@ export function unitChanges(
   return changes;
 }
 
-/** Раздел «Помещения» (ТЗ п. 8.1). Операции, баланс и объединение — этап 5. */
+/** Раздел «Помещения» (ТЗ п. 8.1). Операции и баланс — этап 5. */
 @Injectable()
 export class UnitsService {
-  private readonly logger = new Logger(UnitsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly ownerIds: OwnerIdsService,
-    private readonly storage: StorageService,
     private readonly audit: AuditService,
   ) {}
 
@@ -135,6 +123,7 @@ export class UnitsService {
     const digits = q.replace(/\D/g, '');
     if (digits.length >= 4) {
       conditions.push(owner({ user: { phone: { contains: digits }, deletedAt: null } }));
+      conditions.push(owner({ phone: { contains: digits } }));
     }
     return conditions;
   }
@@ -143,170 +132,31 @@ export class UnitsService {
     return toUnitItem(await this.findWithOwners(id));
   }
 
-  async create(actor: SessionUser, input: UnitFields, ip?: string): Promise<UnitItem> {
-    const unit = await this.prisma.unit
-      .create({ data: unitData(input), include: unitInclude })
-      .catch((error: unknown) => {
-        throw isUniqueViolation(error)
-          ? new ApiError(HttpStatus.CONFLICT, 'CADASTRAL_CODE_TAKEN')
-          : error;
-      });
-    await this.audit.log({
-      userId: actor.id,
-      action: 'unit.create',
-      entity: 'unit',
-      entityId: unit.id,
-      payload: { cadastralCode: unit.cadastralCode, kind: unit.kind, number: unit.number },
-      ip,
-    });
-    return toUnitItem(unit);
-  }
-
-  async update(actor: SessionUser, id: string, input: UnitFields, ip?: string): Promise<UnitItem> {
+  /** Категория тарифа: обязательна для квартир, у остальных видов пустая (ТЗ п. 4.2). */
+  async updateCategory(
+    actor: SessionUser,
+    id: string,
+    tariffCategory: TariffCategory | null,
+    ip?: string,
+  ): Promise<UnitItem> {
     const current = await this.find(id);
-    const changes = unitChanges(current, input);
-    if (current.cadastralCode !== input.cadastralCode) {
-      changes.cadastralCode = { from: current.cadastralCode, to: input.cadastralCode };
-    }
-    const unit = await this.prisma.unit
-      .update({ where: { id }, data: unitData(input), include: unitInclude })
-      .catch((error: unknown) => {
-        throw isUniqueViolation(error)
-          ? new ApiError(HttpStatus.CONFLICT, 'CADASTRAL_CODE_TAKEN')
-          : error;
+    if ((current.kind === 'APARTMENT') !== (tariffCategory !== null)) {
+      throw new ApiError(HttpStatus.BAD_REQUEST, 'VALIDATION', {
+        tariffCategory: current.kind === 'APARTMENT' ? 'REQUIRED' : 'INVALID_VALUE',
       });
-    if (Object.keys(changes).length > 0) {
+    }
+    if (current.tariffCategory !== tariffCategory) {
+      await this.prisma.unit.update({ where: { id }, data: { tariffCategory } });
       await this.audit.log({
         userId: actor.id,
-        action: 'unit.update',
+        action: 'unit.category',
         entity: 'unit',
         entityId: id,
-        payload: changes,
+        payload: { from: current.tariffCategory, to: tariffCategory },
         ip,
       });
     }
-    return toUnitItem(unit);
-  }
-
-  /**
-   * Удаление (ТЗ п. 8.1): права собственности удаляются вместе с помещением, документы — из хранилища.
-   * Запрет удаления при наличии операций появится вместе с операциями на этапе 5.
-   */
-  async remove(actor: SessionUser, id: string, ip?: string): Promise<void> {
-    const unit = await this.find(id);
-    const documents = await this.prisma.unitDocument.findMany({ where: { unitId: id } });
-    await this.prisma.$transaction([
-      this.prisma.unitDocument.deleteMany({ where: { unitId: id } }),
-      this.prisma.unit.delete({ where: { id } }),
-    ]);
-    for (const document of documents) {
-      await this.storage.delete(document.storageKey).catch((error: unknown) => {
-        this.logger.error(`Failed to delete storage object ${document.storageKey}`, error as Error);
-      });
-    }
-    await this.audit.log({
-      userId: actor.id,
-      action: 'unit.delete',
-      entity: 'unit',
-      entityId: id,
-      payload: { cadastralCode: unit.cadastralCode, number: unit.number },
-      ip,
-    });
-  }
-
-  // --- Собственники помещения ---
-
-  async addOwnership(
-    actor: SessionUser,
-    unitId: string,
-    input: AddOwnershipFields,
-    ip?: string,
-  ): Promise<UnitItem> {
-    await this.find(unitId);
-    if (
-      !(await this.prisma.owner.findUnique({ where: { id: input.ownerId }, select: { id: true } }))
-    ) {
-      throw new ApiError(HttpStatus.BAD_REQUEST, 'VALIDATION', { ownerId: 'INVALID_VALUE' });
-    }
-    const ownership = await this.prisma
-      .$transaction(async (tx) => {
-        if (input.isContact) {
-          await tx.unitOwnership.updateMany({ where: { unitId }, data: { isContact: false } });
-        }
-        return tx.unitOwnership.create({
-          data: {
-            unitId,
-            ownerId: input.ownerId,
-            ...shareData(input),
-          },
-        });
-      })
-      .catch((error: unknown) => {
-        throw isUniqueViolation(error)
-          ? new ApiError(HttpStatus.CONFLICT, 'OWNERSHIP_EXISTS')
-          : error;
-      });
-    await this.audit.log({
-      userId: actor.id,
-      action: 'unit.ownership_add',
-      entity: 'unit',
-      entityId: unitId,
-      payload: { ownerId: input.ownerId, ...ownershipPayload(ownership) },
-      ip,
-    });
-    return this.get(unitId);
-  }
-
-  async updateOwnership(
-    actor: SessionUser,
-    unitId: string,
-    ownershipId: string,
-    input: OwnershipFields,
-    ip?: string,
-  ): Promise<UnitItem> {
-    const current = await this.findOwnership(unitId, ownershipId);
-    const ownership = await this.prisma.$transaction(async (tx) => {
-      if (input.isContact) {
-        await tx.unitOwnership.updateMany({
-          where: { unitId, id: { not: ownershipId } },
-          data: { isContact: false },
-        });
-      }
-      return tx.unitOwnership.update({ where: { id: ownershipId }, data: shareData(input) });
-    });
-    await this.audit.log({
-      userId: actor.id,
-      action: 'unit.ownership_update',
-      entity: 'unit',
-      entityId: unitId,
-      payload: {
-        ownerId: current.ownerId,
-        from: ownershipPayload(current),
-        to: ownershipPayload(ownership),
-      },
-      ip,
-    });
-    return this.get(unitId);
-  }
-
-  /** Отвязка собственника: его пользователи теряют доступ к помещению (ТЗ п. 8.1). */
-  async removeOwnership(
-    actor: SessionUser,
-    unitId: string,
-    ownershipId: string,
-    ip?: string,
-  ): Promise<UnitItem> {
-    const current = await this.findOwnership(unitId, ownershipId);
-    await this.prisma.unitOwnership.delete({ where: { id: ownershipId } });
-    await this.audit.log({
-      userId: actor.id,
-      action: 'unit.ownership_remove',
-      entity: 'unit',
-      entityId: unitId,
-      payload: { ownerId: current.ownerId, ...ownershipPayload(current) },
-      ip,
-    });
-    return this.get(unitId);
+    return this.get(id);
   }
 
   async find(id: string): Promise<Unit> {
@@ -326,32 +176,4 @@ export class UnitsService {
     }
     return unit;
   }
-
-  private async findOwnership(unitId: string, ownershipId: string): Promise<UnitOwnership> {
-    const ownership =
-      isUuid(unitId) && isUuid(ownershipId)
-        ? await this.prisma.unitOwnership.findFirst({ where: { id: ownershipId, unitId } })
-        : null;
-    if (!ownership) {
-      throw new ApiError(HttpStatus.NOT_FOUND, 'NOT_FOUND');
-    }
-    return ownership;
-  }
-}
-
-export function shareData(input: OwnershipFields) {
-  return {
-    shareNum: input.share?.num ?? null,
-    shareDen: input.share?.den ?? null,
-    shareNote: input.shareNote,
-    isContact: input.isContact,
-  };
-}
-
-function ownershipPayload(ownership: UnitOwnership) {
-  return {
-    share: ownership.shareNum ? `${ownership.shareNum}/${ownership.shareDen}` : null,
-    shareNote: ownership.shareNote,
-    isContact: ownership.isContact,
-  };
 }
